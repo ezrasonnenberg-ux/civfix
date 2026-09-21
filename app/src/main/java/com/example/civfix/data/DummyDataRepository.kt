@@ -1,9 +1,9 @@
-package com.example.civfix.ui.data
+package com.example.civfix.data
 
-import com.example.civfix.ui.models.Issue
-import com.example.civfix.ui.models.IssueCategory
-import com.example.civfix.ui.models.IssueSeverity
-import com.example.civfix.ui.models.IssueStatus
+import com.example.civfix.data.Issue
+import com.example.civfix.data.IssueCategory
+import com.example.civfix.data.IssueSeverity
+import com.example.civfix.data.IssueStatus
 
 // ==========================================
 // MARK: - Dummy Data Repository for UI Testing

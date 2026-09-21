@@ -1,9 +1,9 @@
-package com.example.civfix.ui.models // or your preferred package
+package com.example.civfix.data
 
 import java.util.UUID
 
 // ==========================================
-// MARK: - Enums for Categories and Status
+// MARK: - Enums for Categories, Severity, and Status
 // ==========================================
 
 enum class IssueCategory(val displayName: String) {
@@ -44,7 +44,7 @@ data class Issue(
     val latitude: Double,
     val longitude: Double,
     val addressText: String,
-    val imageUrls: List<String> = emptyList(), // Can hold local URIs or Supabase URLs!
+    val imageUrls: List<String> = emptyList(),
     val upvotesCount: Int = 0,
     val createdAtTimestamp: Long = System.currentTimeMillis()
 )
