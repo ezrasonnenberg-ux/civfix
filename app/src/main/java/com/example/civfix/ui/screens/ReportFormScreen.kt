@@ -1,5 +1,6 @@
 package com.example.civfix.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,16 +12,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.civfix.data.IssueCategory
+import com.example.civfix.data.IssueRepository
 import com.example.civfix.data.IssueSeverity
 import com.example.civfix.ui.components.common.CivFixButton
 import com.example.civfix.ui.components.common.ButtonStyle
 import com.example.civfix.ui.components.report.CategorySelectorGrid
 import com.example.civfix.ui.components.report.LocationVerificationBox
 import com.example.civfix.ui.components.report.VisualProofUploader
+import kotlinx.coroutines.launch
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 
 // ==========================================
 // MARK: - Report Form Screen Component
@@ -33,13 +39,20 @@ fun ReportFormScreen(
     onSubmitSuccess: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Form state variables matching design mockups
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    // Form state variables starting completely blank/clean
     var selectedCategory by remember { mutableStateOf(IssueCategory.POTHOLE) }
-    var photoCount by remember { mutableStateOf(1) }
+    var photoCount by remember { mutableStateOf(0) } // Starts with 0 photos
     var selectedSeverity by remember { mutableStateOf(IssueSeverity.HIGH) }
-    var addressText by remember { mutableStateOf("742 Evergreen Terrace") }
-    var issueTitle by remember { mutableStateOf("") }
-    var issueDescription by remember { mutableStateOf("") }
+    var addressText by remember { mutableStateOf("Tap 'Current' to fetch GPS location") } // Clear mock address
+    var currentLatitude by remember { mutableStateOf(0.0) }
+    var currentLongitude by remember { mutableStateOf(0.0) }
+
+    // Independent text inputs
+    var issueTitleInput by remember { mutableStateOf("") }
+    var issueDescriptionInput by remember { mutableStateOf("") }
     var smsNotificationsEnabled by remember { mutableStateOf(true) }
 
     val primaryBlue = Color(0xFF004AAD)
@@ -77,7 +90,6 @@ fun ReportFormScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Helper text banner matching design mockup
             Text(
                 text = "Help city public works identify and fix problems in your neighborhood swiftly.",
                 fontSize = 13.sp,
@@ -103,11 +115,22 @@ fun ReportFormScreen(
                 fontWeight = FontWeight.Bold,
                 color = Color.Black
             )
+
+            var hasPhotoSelected by remember { mutableStateOf(false) }
+            // Native gallery picker contract kept cleanly at the screen level
+            val galleryLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.GetContent()
+            ) { uri ->
+                if (uri != null) {
+                    hasPhotoSelected = true
+                    Toast.makeText(context, "Photo attached successfully", Toast.LENGTH_SHORT).show()
+                }
+            }
+
             VisualProofUploader(
-                photoCount = photoCount,
-                onRetakeClicked = { /* Handle camera retake */ },
-                onAddPhotoClicked = { if (photoCount < 3) photoCount++ },
-                onRemovePhotoClicked = { if (photoCount > 0) photoCount-- }
+                hasPhotoSelected = hasPhotoSelected,
+                onRetakeClicked = { hasPhotoSelected = false },
+                onAddPhotoClicked = { galleryLauncher.launch("image/*") }
             )
 
             // 3. Severity Assessment Section
@@ -117,7 +140,6 @@ fun ReportFormScreen(
                 fontWeight = FontWeight.Bold,
                 color = Color.Black
             )
-            // Severity pills selection row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -147,7 +169,6 @@ fun ReportFormScreen(
                 }
             }
 
-            // Severity Info Box Banner
             Surface(
                 shape = RoundedCornerShape(10.dp),
                 color = Color(0xFFE7F5FF)
@@ -160,15 +181,18 @@ fun ReportFormScreen(
                 )
             }
 
-            // 4. Location Verification Section
+            // 4. Location Verification Section with Live GPS Tracking
             LocationVerificationBox(
                 addressText = addressText,
-                gpsAccuracyText = "GPS: ±3m • Auto-detected",
-                onAdjustClicked = { /* Handle map coordinate adjustment */ },
-                onCurrentClicked = { addressText = "Current GPS Location Verified" }
+                onAddressUpdated = { newAddress, lat, lng ->
+                    addressText = newAddress
+                    currentLatitude = lat
+                    currentLongitude = lng
+                },
+                onAdjustClicked = { /* Handle map manual adjust */ }
             )
 
-            // 5. Title & Description Section
+            // 5. Title Input Field
             Text(
                 text = "Issue Title *",
                 fontSize = 14.sp,
@@ -176,8 +200,8 @@ fun ReportFormScreen(
                 color = Color.Black
             )
             OutlinedTextField(
-                value = issueTitle,
-                onValueChange = { issueTitle = it },
+                value = issueTitleInput,
+                onValueChange = { issueTitleInput = it },
                 placeholder = { Text("e.g. Severe pothole damaging car tires") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
@@ -188,6 +212,7 @@ fun ReportFormScreen(
                 )
             )
 
+            // 6. Description Input Field
             Text(
                 text = "Detailed Description *",
                 fontSize = 14.sp,
@@ -195,8 +220,8 @@ fun ReportFormScreen(
                 color = Color.Black
             )
             OutlinedTextField(
-                value = issueDescription,
-                onValueChange = { issueDescription = it },
+                value = issueDescriptionInput,
+                onValueChange = { issueDescriptionInput = it },
                 placeholder = { Text("Describe the hazard and precise surroundings...") },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -208,7 +233,7 @@ fun ReportFormScreen(
                 )
             )
 
-            // 6. SMS Toggle Row
+            // 7. SMS Toggle Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -236,10 +261,35 @@ fun ReportFormScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 7. Submit CTA Button
+            // 8. Submit CTA Button with Live Database Insertion Logic
             CivFixButton(
                 buttonText = "Submit CivFix Report",
-                onClickAction = onSubmitSuccess,
+                onClickAction = {
+                    if (issueTitleInput.isBlank() || issueDescriptionInput.isBlank()) {
+                        Toast.makeText(context, "Please fill in all required fields", Toast.LENGTH_SHORT).show()
+                        return@CivFixButton
+                    }
+
+                    coroutineScope.launch {
+                        val result = IssueRepository.insertIssue(
+                            title = issueTitleInput,
+                            category = selectedCategory.displayName,
+                            description = issueDescriptionInput,
+                            severity = selectedSeverity.displayName,
+                            latitude = currentLatitude,
+                            longitude = currentLongitude,
+                            addressText = addressText
+                        )
+
+                        if (result.isSuccess) {
+                            Toast.makeText(context, "Report saved to database successfully!", Toast.LENGTH_SHORT).show()
+                            onSubmitSuccess()
+                        } else {
+                            val errorMsg = result.exceptionOrNull()?.localizedMessage ?: "Unknown database error"
+                            Toast.makeText(context, "Failed: $errorMsg", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
                 style = ButtonStyle.PRIMARY_CTA
             )
 

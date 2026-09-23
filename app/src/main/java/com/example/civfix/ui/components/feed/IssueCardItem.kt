@@ -18,9 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// Import based on where you placed Issue.kt (adjust package if your data package is different)
 import com.example.civfix.data.Issue
-import com.example.civfix.data.IssueStatus
 
 // ==========================================
 // MARK: - Reusable Issue Card Component
@@ -57,7 +55,7 @@ fun IssueCardItem(
                 StatusBadge(status = issue.status)
 
                 Text(
-                    text = "25m ago",
+                    text = formatTimeAgo(issue.createdAtTimestamp),
                     fontSize = 12.sp,
                     color = Color.Gray
                 )
@@ -98,14 +96,13 @@ fun IssueCardItem(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = issue.addressText,
+                            text = issue.address_text,
                             fontSize = 13.sp,
                             color = Color.DarkGray
                         )
                     }
                 }
 
-                // Thumbnail Image placeholder box
                 Box(
                     modifier = Modifier
                         .size(64.dp)
@@ -124,7 +121,6 @@ fun IssueCardItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Upvote Button Pill using clickable Surface safely
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = Color(0xFFF0F4F8),
@@ -142,7 +138,7 @@ fun IssueCardItem(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = issue.upvotesCount.toString(),
+                            text = issue.upvotes_count.toString(),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF004AAD)
@@ -162,21 +158,32 @@ fun IssueCardItem(
     }
 }
 
-// ==========================================
-// MARK: - Helper Composable: Status Badge
-// ==========================================
+fun formatTimeAgo(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diffMillis = now - timestamp
+    val minutes = diffMillis / (1000 * 60)
+    val hours = minutes / 60
+    val days = hours / 24
 
+    return when {
+        minutes < 1 -> "Just now"
+        minutes < 60 -> "${minutes}m ago"
+        hours < 24 -> "${hours}h ago"
+        else -> "${days}d ago"
+    }
+}
 // ==========================================
 // MARK: - Helper Composable: Status Badge
 // ==========================================
 
 @Composable
-fun StatusBadge(status: IssueStatus) {
-    val colorPair = when (status) {
-        IssueStatus.PENDING -> Color(0xFFFFECE5) to Color(0xFFD9480F)
-        IssueStatus.SCHEDULED -> Color(0xFFE7F5FF) to Color(0xFF1C7ED6)
-        IssueStatus.IN_PROGRESS -> Color(0xFFF3F0FF) to Color(0xFF7048E8)
-        IssueStatus.RESOLVED -> Color(0xFFEBFbee) to Color(0xFF2B8A3E)
+fun StatusBadge(status: String) {
+    val colorPair = when (status.lowercase()) {
+        "pending" -> Color(0xFFFFECE5) to Color(0xFFD9480F)
+        "scheduled" -> Color(0xFFE7F5FF) to Color(0xFF1C7ED6)
+        "in progress" -> Color(0xFFF3F0FF) to Color(0xFF7048E8)
+        "resolved" -> Color(0xFFEBFbee) to Color(0xFF2B8A3E)
+        else -> Color.LightGray to Color.DarkGray
     }
 
     val backgroundColor = colorPair.first
@@ -187,7 +194,7 @@ fun StatusBadge(status: IssueStatus) {
         color = backgroundColor
     ) {
         Text(
-            text = status.displayName,
+            text = status,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,

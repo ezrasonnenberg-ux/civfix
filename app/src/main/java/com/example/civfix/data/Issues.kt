@@ -1,11 +1,9 @@
 package com.example.civfix.data
 
-import java.util.UUID
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.InternalSerializationApi
 
-// ==========================================
-// MARK: - Enums for Categories, Severity, and Status
-// ==========================================
-
+@Serializable
 enum class IssueCategory(val displayName: String) {
     POTHOLE("Pothole / Road"),
     STREETLIGHT("Streetlight"),
@@ -15,6 +13,7 @@ enum class IssueCategory(val displayName: String) {
     PARK_TREES("Park / Trees")
 }
 
+@Serializable
 enum class IssueSeverity(val displayName: String, val tier: String) {
     LOW("Low / Cosmetic", "Priority Tier 4"),
     MEDIUM("Medium / Standard", "Priority Tier 3"),
@@ -22,6 +21,7 @@ enum class IssueSeverity(val displayName: String, val tier: String) {
     CRITICAL("Critical / Danger", "Priority Tier 1")
 }
 
+@Serializable
 enum class IssueStatus(val displayName: String) {
     PENDING("Pending"),
     SCHEDULED("Scheduled"),
@@ -29,22 +29,19 @@ enum class IssueStatus(val displayName: String) {
     RESOLVED("Resolved")
 }
 
-// ==========================================
-// MARK: - Main Issue Data Class
-// ==========================================
-
+@Serializable
+@OptIn(InternalSerializationApi::class)
 data class Issue(
-    val id: String = UUID.randomUUID().toString(),
-    val userId: String,
+    val id: String? = null,
+    val user_id: String? = null,
     val title: String,
-    val category: IssueCategory,
+    val category: String,
     val description: String,
-    val severity: IssueSeverity,
-    val status: IssueStatus = IssueStatus.PENDING,
+    val severity: String,
+    val status: String = "Pending",
     val latitude: Double,
+    val createdAtTimestamp: Long = System.currentTimeMillis(),
     val longitude: Double,
-    val addressText: String,
-    val imageUrls: List<String> = emptyList(),
-    val upvotesCount: Int = 0,
-    val createdAtTimestamp: Long = System.currentTimeMillis()
+    val address_text: String,
+    val upvotes_count: Int = 0
 )

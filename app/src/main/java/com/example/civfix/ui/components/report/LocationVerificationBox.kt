@@ -1,5 +1,10 @@
 package com.example.civfix.ui.components.report
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -8,14 +13,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.example.civfix.data.LocationHelper
 import com.example.civfix.ui.components.common.CivFixButton
 import com.example.civfix.ui.components.common.ButtonStyle
 
@@ -26,18 +34,42 @@ import com.example.civfix.ui.components.common.ButtonStyle
 @Composable
 fun LocationVerificationBox(
     addressText: String,
-    gpsAccuracyText: String,
+    onAddressUpdated: (String, Double, Double) -> Unit,
     onAdjustClicked: () -> Unit,
-    onCurrentClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val primaryBlue = Color(0xFF004AAD)
+
+    var gpsStatusText by remember { mutableStateOf("GPS: ±3m • Ready") }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            gpsStatusText = "GPS: Acquiring..."
+            LocationHelper.fetchCurrentLocation(
+                context = context,
+                onLocationFetched = { lat, lng, readable ->
+                    gpsStatusText = "GPS: Locked (±2m accuracy)"
+                    onAddressUpdated(readable, lat, lng)
+                    Toast.makeText(context, "Live GPS synchronized!", Toast.LENGTH_SHORT).show()
+                },
+                onError = { e ->
+                    gpsStatusText = "GPS Error"
+                    Toast.makeText(context, e.localizedMessage ?: "Failed to get location", Toast.LENGTH_SHORT).show()
+                }
+            )
+        } else {
+            Toast.makeText(context, "Location permission is required to fetch GPS coordinates.", Toast.LENGTH_LONG).show()
+        }
+    }
 
     Column(
         modifier = modifier.fillMaxWidth()
     ) {
         // ==========================================
-        // MARK: - GPS Status Tag & Mini Map Box
+        // MARK: - Header & GPS Status Tag
         // ==========================================
         Row(
             modifier = Modifier
@@ -53,7 +85,6 @@ fun LocationVerificationBox(
                 color = Color.Black
             )
 
-            // GPS Auto-detected pill tag matching design
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = Color(0xFFE7F5FF)
@@ -70,7 +101,7 @@ fun LocationVerificationBox(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = gpsAccuracyText, // e.g. "GPS: ±3m • Auto-detected"
+                        text = gpsStatusText,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF1C7ED6)
@@ -79,7 +110,9 @@ fun LocationVerificationBox(
             }
         }
 
-        // Mini map simulation card container
+        // ==========================================
+        // MARK: - Mini Map Preview Box
+        // ==========================================
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -89,7 +122,6 @@ fun LocationVerificationBox(
                 .border(1.dp, Color.LightGray, RoundedCornerShape(14.dp)),
             contentAlignment = Alignment.Center
         ) {
-            // Center map pin icon representing auto-detected coordinates
             Icon(
                 imageVector = Icons.Default.Place,
                 contentDescription = "Map Pin",
@@ -98,10 +130,10 @@ fun LocationVerificationBox(
             )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         // ==========================================
-        // MARK: - Address Display & Action Buttons Row
+        // MARK: - Address & Centered Action Buttons
         // ==========================================
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -120,31 +152,59 @@ fun LocationVerificationBox(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = addressText, // e.g. "742 Evergreen Terrace"
+                    text = addressText,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.DarkGray,
                     maxLines = 1
                 )
             }
+        }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(modifier = Modifier.width(80.dp)) {
-                    CivFixButton(
-                        buttonText = "Adjust",
-                        onClickAction = onAdjustClicked,
-                        style = ButtonStyle.SECONDARY_OUTLINE
-                    )
-                }
-                Box(modifier = Modifier.width(85.dp)) {
-                    CivFixButton(
-                        buttonText = "Current",
-                        onClickAction = onCurrentClicked,
-                        style = ButtonStyle.SECONDARY_OUTLINE
-                    )
-                }
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Centered buttons row matching VisualProofUploader layout exactly
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.width(130.dp)) {
+                CivFixButton(
+                    buttonText = "Adjust",
+                    onClickAction = onAdjustClicked,
+                    style = ButtonStyle.SECONDARY_OUTLINE
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Box(modifier = Modifier.width(130.dp)) {
+                CivFixButton(
+                    buttonText = "Current",
+                    onClickAction = {
+                        val permissionCheck = ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                        )
+                        if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+                            gpsStatusText = "GPS: Fetching..."
+                            LocationHelper.fetchCurrentLocation(
+                                context = context,
+                                onLocationFetched = { lat, lng, readable ->
+                                    gpsStatusText = "GPS: Locked (±2m)"
+                                    onAddressUpdated(readable, lat, lng)
+                                    Toast.makeText(context, "Live GPS synchronized!", Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { e ->
+                                    gpsStatusText = "GPS Error"
+                                    Toast.makeText(context, e.localizedMessage ?: "Error", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        } else {
+                            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                        }
+                    },
+                    style = ButtonStyle.SECONDARY_OUTLINE
+                )
             }
         }
     }

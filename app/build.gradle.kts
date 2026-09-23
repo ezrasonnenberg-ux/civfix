@@ -1,7 +1,7 @@
 plugins {
     id("com.android.application")
     alias(libs.plugins.kotlin.compose)
-  //  kotlin("plugin.serialization")
+    kotlin("plugin.serialization") version "1.9.23"
 
 }
     android {
@@ -64,8 +64,24 @@ plugins {
         implementation("androidx.compose.material:material-icons-extended")
 
         implementation("com.google.android.material:material:1.11.0")
+
         // Testing
         testImplementation("junit:junit:4.13.2")
         androidTestImplementation("androidx.test.ext:junit:1.1.5")
         androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+
+        // Google Play Services Location for live GPS hardware tracking
+        implementation("com.google.android.gms:play-services-location:21.2.0")
+
+        // Serialization & Ktor Client (Required for Supabase)
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+        implementation("io.ktor:ktor-client-android:2.3.10")
+
+        // SUPABASE KOTLIN SDK (Using Platform BOM Wrapper)
+        implementation(platform("io.github.jan-tennert.supabase:bom:2.5.2"))
+        implementation("io.github.jan-tennert.supabase:postgrest-kt")
+        implementation("io.github.jan-tennert.supabase:gotrue-kt")
+        implementation("io.github.jan-tennert.supabase:storage-kt")
+
+
     }

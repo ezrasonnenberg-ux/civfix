@@ -6,10 +6,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAPhoto
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,37 +20,29 @@ import com.example.civfix.ui.components.common.CivFixButton
 import com.example.civfix.ui.components.common.ButtonStyle
 
 // ==========================================
-// MARK: - Visual Proof Uploader Component
+// MARK: - Modular Visual Proof Uploader Component
 // ==========================================
 
 @Composable
 fun VisualProofUploader(
-    photoCount: Int,
+    hasPhotoSelected: Boolean,
     onRetakeClicked: () -> Unit,
     onAddPhotoClicked: () -> Unit,
-    onRemovePhotoClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val primaryBlue = Color(0xFF004AAD)
-
     Column(
         modifier = modifier.fillMaxWidth()
     ) {
-        // ==========================================
-        // MARK: - Photo Preview Container Box
-        // ==========================================
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(180.dp)
+                .height(150.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color(0xFFE9ECEF))
                 .border(1.dp, Color.LightGray, RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center
         ) {
-            // If photos are attached, show preview layout; otherwise show placeholder state
-            if (photoCount > 0) {
-                // Mock preview representation matching your design
+            if (hasPhotoSelected) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
@@ -60,12 +51,12 @@ fun VisualProofUploader(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = "Photo Attached",
                         tint = Color(0xFF2B8A3E),
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(32.dp)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "$photoCount of 3 photos added",
-                        fontSize = 14.sp,
+                        text = "Visual proof attached",
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.DarkGray
                     )
@@ -78,13 +69,13 @@ fun VisualProofUploader(
                     Icon(
                         imageVector = Icons.Default.AddAPhoto,
                         contentDescription = "Add Photo",
-                        tint = primaryBlue,
-                        modifier = Modifier.size(36.dp)
+                        tint = Color(0xFF004AAD),
+                        modifier = Modifier.size(32.dp)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Tap to capture visual proof",
-                        fontSize = 13.sp,
+                        text = "Tap 'Add Photo' to upload image",
+                        fontSize = 12.sp,
                         color = Color.Gray
                     )
                 }
@@ -93,23 +84,21 @@ fun VisualProofUploader(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // ==========================================
-        // MARK: - Retake & Add Photo Action Buttons
-        // ==========================================
+        // Balanced Buttons Row
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(modifier = Modifier.weight(1f)) {
+            Box(modifier = Modifier.width(130.dp)) {
                 CivFixButton(
                     buttonText = "Retake",
                     onClickAction = onRetakeClicked,
                     style = ButtonStyle.SECONDARY_OUTLINE
                 )
             }
-
-            Box(modifier = Modifier.weight(1f)) {
+            Spacer(modifier = Modifier.width(16.dp))
+            Box(modifier = Modifier.width(130.dp)) {
                 CivFixButton(
                     buttonText = "Add Photo",
                     onClickAction = onAddPhotoClicked,
