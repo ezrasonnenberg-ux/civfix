@@ -261,7 +261,7 @@ fun ReportFormScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 8. Submit CTA Button with Live Database Insertion Logic
+            // 8. Submit CTA Button with Persistent Local Storage Logic
             CivFixButton(
                 buttonText = "Submit CivFix Report",
                 onClickAction = {
@@ -271,7 +271,9 @@ fun ReportFormScreen(
                     }
 
                     coroutineScope.launch {
+                        // Pass 'context = context' here so it persists to disk!
                         val result = IssueRepository.insertIssue(
+                            context = context,
                             title = issueTitleInput,
                             category = selectedCategory.displayName,
                             description = issueDescriptionInput,
@@ -282,7 +284,7 @@ fun ReportFormScreen(
                         )
 
                         if (result.isSuccess) {
-                            Toast.makeText(context, "Report saved to database successfully!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Report saved and persisted successfully!", Toast.LENGTH_SHORT).show()
                             onSubmitSuccess()
                         } else {
                             val errorMsg = result.exceptionOrNull()?.localizedMessage ?: "Unknown database error"
@@ -292,7 +294,6 @@ fun ReportFormScreen(
                 },
                 style = ButtonStyle.PRIMARY_CTA
             )
-
             Spacer(modifier = Modifier.height(20.dp))
         }
     }

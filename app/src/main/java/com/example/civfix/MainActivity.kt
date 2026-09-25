@@ -31,6 +31,8 @@ import com.example.civfix.ui.screens.ReportFormScreen
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Initialize persistent local storage on app boot
+        IssueRepository.init(applicationContext)
         setContent {
             Surface(
                 modifier = Modifier.fillMaxSize(),

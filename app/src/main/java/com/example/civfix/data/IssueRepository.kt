@@ -1,24 +1,60 @@
 package com.example.civfix.data
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 // ==========================================
-// MARK: - Safe Hybrid Issue Repository
+// MARK: - Persistent Local Storage Repository
 // ==========================================
 
 object IssueRepository {
 
-    // Local runtime cache list to display new posts in the Feed
-    private val localRuntimeCache = mutableListOf<Issue>()
+    private const val PREFS_NAME = "civfix_local_prefs"
+    private const val KEY_ISSUES_JSON = "key_saved_issues_json"
+
+    private var isInitialized = false
+    private val persistentCache = mutableListOf<Issue>()
+
+    // Initialize storage from device SharedPreferences on app startup
+    fun init(context: Context) {
+        if (isInitialized) return
+        try {
+            val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val jsonString = prefs.getString(KEY_ISSUES_JSON, null)
+            if (!jsonString.isNullOrEmpty()) {
+                val decodedList = Json.decodeFromString<List<Issue>>(jsonString)
+                persistentCache.clear()
+                persistentCache.addAll(decodedList)
+            }
+        } catch (e: Exception) {
+            Log.e("IssueRepository", "Failed to load persistent storage: ${e.localizedMessage}")
+        }
+        isInitialized = true
+    }
+
+    private fun saveToDisk(context: Context?) {
+        if (context == null) return
+        try {
+            val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val jsonString = Json.encodeToString(persistentCache)
+            prefs.edit().putString(KEY_ISSUES_JSON, jsonString).apply()
+        } catch (e: Exception) {
+            Log.e("IssueRepository", "Failed to save to persistent storage: ${e.localizedMessage}")
+        }
+    }
 
     fun getCachedIssues(): List<Issue> {
-        return localRuntimeCache
+        return persistentCache
     }
 
     suspend fun insertIssue(
+        context: Context?,
         title: String,
         category: String,
         description: String,
@@ -41,14 +77,17 @@ object IssueRepository {
                     upvotes_count = 1
                 )
 
-                // 1. Instantly save to local runtime cache
-                localRuntimeCache.add(0, newIssue)
+                // 1. Add to active memory cache
+                persistentCache.add(0, newIssue)
 
-                // 2. Safely attempt Supabase network insertion if Docker/Cloud is active
+                // 2. Commit and persist immediately to device storage so it survives reboots!
+                saveToDisk(context)
+
+                // 3. Try syncing with Supabase/Docker in the background
                 try {
                     SupabaseClient.client.from("issues").insert(newIssue)
                 } catch (dbError: Exception) {
-                    Log.w("SupabaseSync", "Network/Docker offline, using local app state: ${dbError.localizedMessage}")
+                    Log.w("SupabaseSync", "Docker backend offline, local persistence active: ${dbError.localizedMessage}")
                 }
 
                 Result.success(Unit)
