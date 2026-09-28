@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,18 +28,20 @@ import com.example.civfix.ui.components.feed.SearchAndFilterHeader
 import com.example.civfix.ui.screens.MapScreen
 import com.example.civfix.ui.screens.ProfileScreen
 import com.example.civfix.ui.screens.ReportFormScreen
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Initialize persistent local storage on app boot
+
         IssueRepository.init(applicationContext)
+
         setContent {
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = Color(0xFFF8F9FA)
             ) {
-                CivFixMainApp()
+                CivicFixMainApp()
             }
         }
     }
@@ -49,11 +52,11 @@ class MainActivity : ComponentActivity() {
 // ==========================================
 
 @Composable
-fun CivFixMainApp() {
+fun CivicFixMainApp() {
     var currentRoute by remember { mutableStateOf(Screen.Feed.route) }
     var isReportFormOpen by remember { mutableStateOf(false) }
 
-    // Single source of truth from repository cache (starts empty for clean launch)
+    // Single source of truth from repository cache managed by state
     var issueList by remember { mutableStateOf(IssueRepository.getCachedIssues()) }
 
     val primaryBlue = Color(0xFF004AAD)
@@ -62,7 +65,7 @@ fun CivFixMainApp() {
         ReportFormScreen(
             onCloseClicked = { isReportFormOpen = false },
             onSubmitSuccess = {
-                issueList = IssueRepository.getCachedIssues()
+                issueList = IssueRepository.getCachedIssues().toMutableList()
                 isReportFormOpen = false
             }
         )
@@ -100,6 +103,10 @@ fun CivFixMainApp() {
             when (currentRoute) {
                 Screen.Feed.route -> FeedScreenContent(
                     issueList = issueList,
+                    onIssueActionTriggered = {
+                        // Refresh the parent root state list safely
+                        issueList = IssueRepository.getCachedIssues().toMutableList()
+                    },
                     onMapButtonClicked = { currentRoute = Screen.Map.route }
                 )
                 Screen.Map.route -> MapScreen(
@@ -110,9 +117,8 @@ fun CivFixMainApp() {
                 )
                 Screen.Profile.route -> ProfileScreen(
                     onLoadDemoDataClicked = {
-                        // Seed dummy data on command for presentation demo
                         DummyDataRepository.getInitialCommunityIssues()
-                        issueList = IssueRepository.getCachedIssues()
+                        issueList = IssueRepository.getCachedIssues().toMutableList()
                     }
                 )
             }
@@ -127,12 +133,16 @@ fun CivFixMainApp() {
 @Composable
 fun FeedScreenContent(
     issueList: List<com.example.civfix.data.Issue>,
+    onIssueActionTriggered: () -> Unit, // Callback to update parent state
     onMapButtonClicked: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
+    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     val filteredIssues = issueList.filter { issue ->
+        val isNotArchived = !issue.status.equals("Resolved", ignoreCase = true)
         val matchesSearch = issue.title.contains(searchQuery, ignoreCase = true) ||
                 issue.address_text.contains(searchQuery, ignoreCase = true)
         val matchesCategory = when (selectedCategory) {
@@ -144,7 +154,7 @@ fun FeedScreenContent(
             "In Progress" -> issue.status.equals("In Progress", ignoreCase = true)
             else -> true
         }
-        matchesSearch && matchesCategory
+        isNotArchived && matchesSearch && matchesCategory
     }
 
     Column(
@@ -217,7 +227,15 @@ fun FeedScreenContent(
                     IssueCardItem(
                         issue = issue,
                         onUpvoteClicked = {},
-                        onShareClicked = {}
+                        onShareClicked = {},
+                        onResolveClicked = {
+                            if (issue.id != null) {
+                                coroutineScope.launch {
+                                    IssueRepository.progressIssueStatus(context, issue.id)
+                                    onIssueActionTriggered() // Safely triggers parent state reload
+                                }
+                            }
+                        }
                     )
                 }
             }

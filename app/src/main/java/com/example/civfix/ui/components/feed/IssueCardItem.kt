@@ -29,6 +29,7 @@ fun IssueCardItem(
     issue: Issue,
     onUpvoteClicked: () -> Unit,
     onShareClicked: () -> Unit,
+    onResolveClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -55,7 +56,7 @@ fun IssueCardItem(
                 StatusBadge(status = issue.status)
 
                 Text(
-                    text = formatTimeAgo(issue.createdAtTimestamp),
+                    text = formatTimeAgo(issue.createdAtTimestamp), // Restored dynamic elapsed time
                     fontSize = 12.sp,
                     color = Color.Gray
                 )
@@ -114,13 +115,14 @@ fun IssueCardItem(
             Spacer(modifier = Modifier.height(14.dp))
 
             // ==========================================
-            // MARK: - Footer: Upvote & Share Actions
+            // MARK: - Footer: Upvote, Workflow State & Share Actions
             // ==========================================
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Upvote Button Pill
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = Color(0xFFF0F4F8),
@@ -146,32 +148,37 @@ fun IssueCardItem(
                     }
                 }
 
-                IconButton(onClick = onShareClicked) {
-                    Icon(
-                        imageVector = Icons.Outlined.Share,
-                        contentDescription = "Share Report",
-                        tint = Color.Gray
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Dynamic workflow action button text based on current status
+                    val isPending = issue.status.equals("Pending", ignoreCase = true)
+                    val actionButtonText = if (isPending) "Start Progress" else "Mark Resolved"
+                    val actionButtonColor = if (isPending) Color(0xFF1C7ED6) else Color(0xFF2B8A3E)
+
+                    TextButton(onClick = onResolveClicked) {
+                        Text(
+                            text = actionButtonText,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = actionButtonColor
+                        )
+                    }
+
+                    IconButton(onClick = onShareClicked) {
+                        Icon(
+                            imageVector = Icons.Outlined.Share,
+                            contentDescription = "Share Report",
+                            tint = Color.Gray
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-fun formatTimeAgo(timestamp: Long): String {
-    val now = System.currentTimeMillis()
-    val diffMillis = now - timestamp
-    val minutes = diffMillis / (1000 * 60)
-    val hours = minutes / 60
-    val days = hours / 24
-
-    return when {
-        minutes < 1 -> "Just now"
-        minutes < 60 -> "${minutes}m ago"
-        hours < 24 -> "${hours}h ago"
-        else -> "${days}d ago"
-    }
-}
 // ==========================================
 // MARK: - Helper Composable: Status Badge
 // ==========================================
@@ -200,5 +207,24 @@ fun StatusBadge(status: String) {
             fontWeight = FontWeight.Bold,
             color = textColor
         )
+    }
+}
+
+// ==========================================
+// MARK: - Helper Function: Dynamic Time Elapsed
+// ==========================================
+
+fun formatTimeAgo(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diffMillis = now - timestamp
+    val minutes = diffMillis / (1000 * 60)
+    val hours = minutes / 60
+    val days = hours / 24
+
+    return when {
+        minutes < 1 -> "Just now"
+        minutes < 60 -> "${minutes}m ago"
+        hours < 24 -> "${hours}h ago"
+        else -> "${days}d ago"
     }
 }

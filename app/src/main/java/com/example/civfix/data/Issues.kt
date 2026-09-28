@@ -32,7 +32,7 @@ enum class IssueStatus(val displayName: String) {
 @Serializable
 @OptIn(InternalSerializationApi::class)
 data class Issue(
-    val id: String? = null,
+    val id: String = java.util.UUID.randomUUID().toString(), //
     val user_id: String? = null,
     val title: String,
     val category: String,

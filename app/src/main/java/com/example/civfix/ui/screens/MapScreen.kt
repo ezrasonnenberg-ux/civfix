@@ -1,28 +1,28 @@
 package com.example.civfix.ui.screens
 
+import android.view.ViewGroup
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.civfix.data.Issue
 import com.example.civfix.ui.components.common.CivFixButton
 import com.example.civfix.ui.components.common.ButtonStyle
 
 // ==========================================
-// MARK: - Dynamic Map Screen with Empty State
+// MARK: - Live WebView OpenStreetMap Component
 // ==========================================
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,125 +32,60 @@ fun MapScreen(
     onViewFullReportClicked: (Issue) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var mapSearchQuery by remember { mutableStateOf("") }
-    var selectedFilterChip by remember { mutableStateOf("Hazards") }
-
-    val displayedIssues = issues.filter { issue ->
-        issue.title.contains(mapSearchQuery, ignoreCase = true) ||
-                issue.address_text.contains(mapSearchQuery, ignoreCase = true)
-    }
-
     var selectedIssue by remember { mutableStateOf(issues.firstOrNull()) }
     val primaryBlue = Color(0xFF004AAD)
+
+    // Fallback coordinates if no issues exist (defaults to your current region or general center)
+    val centerLat = selectedIssue?.latitude ?: -33.9221
+    val centerLng = selectedIssue?.longitude ?: 18.4231
 
     Box(
         modifier = modifier.fillMaxSize()
     ) {
-        // Map Background Canvas
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFFE2E8F0)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (issues.isEmpty()) {
-                // TRUE MAP EMPTY STATE WHEN NO ISSUES EXIST
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(32.dp)
-                ) {
+        if (issues.isEmpty()) {
+            // Empty State for Map
+            Box(
+                modifier = Modifier.fillMaxSize().background(Color(0xFFE2E8F0)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
                     Text(text = "🗺️", fontSize = 36.sp)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "No map coordinates to display",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.DarkGray
-                    )
+                    Text(text = "No map coordinates to display", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Log an issue or load the demo dataset from your Profile to view markers here.",
-                        fontSize = 13.sp,
-                        color = Color.Gray,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
+                    Text(text = "Log an issue with active GPS to plot markers here.", fontSize = 13.sp, color = Color.Gray, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
-            } else {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Map,
-                        contentDescription = "Map Canvas",
-                        tint = Color.LightGray,
-                        modifier = Modifier.size(120.dp)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Live GPS Vector Map (${displayedIssues.size} markers plotted)",
-                        fontSize = 13.sp,
-                        color = Color.DarkGray,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+            }
+        } else {
+            // ==========================================
+            // MARK: - Real Interactive OpenStreetMap via WebView
+            // ==========================================
+            AndroidView(
+                factory = { context ->
+                    WebView(context).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                        webViewClient = WebViewClient()
+                        settings.javaScriptEnabled = true
 
-                // Render Pins Dynamically for Active Issues
-                displayedIssues.forEachIndexed { index, issue ->
-                    val offsetX = (index * 50 - 50).dp
-                    val offsetY = (index * 40 - 70).dp
-
-                    IconButton(
-                        onClick = { selectedIssue = issue },
-                        modifier = Modifier.offset(x = offsetX, y = offsetY)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFFD9480F),
-                            shadowElevation = 4.dp
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = issue.title,
-                                tint = Color.White,
-                                modifier = Modifier.padding(6.dp).size(18.dp)
-                            )
-                        }
+                        // Load OpenStreetMap centered dynamically on the issue's GPS coordinates
+                        val mapUrl = "https://www.openstreetmap.org/?mlat=$centerLat&mlon=$centerLng#map=16/$centerLat/$centerLng"
+                        loadUrl(mapUrl)
                     }
-                }
-            }
+                },
+                update = { webView ->
+                    val mapUrl = "https://www.openstreetmap.org/?mlat=$centerLat&mlon=$centerLng#map=16/$centerLat/$centerLng"
+                    webView.loadUrl(mapUrl)
+                },
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
-        // Top Search Bar (Only show if issues exist)
-        if (issues.isNotEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .align(Alignment.TopCenter)
-            ) {
-                OutlinedTextField(
-                    value = mapSearchQuery,
-                    onValueChange = { mapSearchQuery = it },
-                    placeholder = { Text("Search map reports...") },
-                    leadingIcon = {
-                        Icon(imageVector = Icons.Default.Search, contentDescription = "Search", tint = Color.Gray)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        unfocusedBorderColor = Color.Transparent,
-                        focusedBorderColor = primaryBlue
-                    ),
-                    singleLine = true
-                )
-            }
-        }
-
-        // Bottom Preview Card
+        // ==========================================
+        // MARK: - Bottom Preview Card Overlay
+        // ==========================================
         if (selectedIssue != null && issues.isNotEmpty()) {
             val issue = selectedIssue!!
             Card(
