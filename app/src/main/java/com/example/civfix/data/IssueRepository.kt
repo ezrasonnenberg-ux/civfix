@@ -10,7 +10,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 // ==========================================
-// MARK: - Fully Synchronized Database Repository
+// MARK: - Bulletproof Persistent Repository
 // ==========================================
 
 object IssueRepository {
@@ -19,22 +19,32 @@ object IssueRepository {
     private const val KEY_ISSUES_JSON = "key_saved_issues_json"
     private val persistentCache = mutableListOf<Issue>()
 
+    // Lenient JSON configuration so missing or new fields never crash the app
+    private val jsonConfiguration = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        coerceInputValues = true
+    }
+
     fun init(context: Context) {
         try {
             val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val jsonString = prefs.getString(KEY_ISSUES_JSON, null)
             if (!jsonString.isNullOrEmpty()) {
                 try {
-                    val decodedList = Json.decodeFromString<List<Issue>>(jsonString)
+                    val decodedList = jsonConfiguration.decodeFromString<List<Issue>>(jsonString)
                     persistentCache.clear()
                     persistentCache.addAll(decodedList)
-                } catch (e: Exception) {
+                    Log.d("IssueRepository", "Successfully loaded ${decodedList.size} items from local storage.")
+                } catch (serializationError: Exception) {
+                    // If JSON structure changed, log it safely instead of letting it crash the app loop
+                    Log.e("IssueRepository", "Cache format mismatch, safely resetting cache: ${serializationError.localizedMessage}")
                     prefs.edit().remove(KEY_ISSUES_JSON).apply()
                     persistentCache.clear()
                 }
             }
         } catch (e: Exception) {
-            Log.e("IssueRepository", "Init error: ${e.localizedMessage}")
+            Log.e("IssueRepository", "Critical initialization error: ${e.localizedMessage}")
         }
     }
 
@@ -42,10 +52,10 @@ object IssueRepository {
         if (context == null) return
         try {
             val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val jsonString = Json.encodeToString(persistentCache)
+            val jsonString = jsonConfiguration.encodeToString(persistentCache)
             prefs.edit().putString(KEY_ISSUES_JSON, jsonString).apply()
         } catch (e: Exception) {
-            Log.e("IssueRepository", "Save error: ${e.localizedMessage}")
+            Log.e("IssueRepository", "Failed to save to disk: ${e.localizedMessage}")
         }
     }
 
@@ -53,30 +63,9 @@ object IssueRepository {
         return persistentCache
     }
 
-    // Pulls centralized data directly from Supabase DB to eliminate multi-user conflicts
-    suspend fun fetchFreshIssuesFromDatabase(): List<Issue> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val remoteIssues = SupabaseClient.client
-                    .from("issues")
-                    .select()
-                    .decodeList<Issue>()
-
-                persistentCache.clear()
-                persistentCache.addAll(remoteIssues)
-                persistentCache
-            } catch (e: Exception) {
-                Log.w("SupabaseFetch", "Offline mode active, using local cache: ${e.localizedMessage}")
-                persistentCache
-            }
-        }
-    }
-
-    // Progresses issue status sequentially: Pending -> In Progress -> Resolved (Archived)
     suspend fun progressIssueStatus(context: Context?, issueId: String): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
-                Log.d("IssueRepo", "Attempting to progress status for ID: $issueId")
                 val target = persistentCache.find { it.id == issueId }
                 if (target != null) {
                     val nextStatus = when (target.status.lowercase()) {
@@ -89,13 +78,9 @@ object IssueRepository {
                     persistentCache.remove(target)
                     persistentCache.add(updated)
                     saveToDisk(context)
-                    Log.d("IssueRepo", "Successfully updated local state to: $nextStatus")
-                } else {
-                    Log.w("IssueRepo", "Warning: Target issue with ID $issueId not found in cache!")
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
-                Log.e("IssueRepo", "Error progressing status: ${e.localizedMessage}")
                 Result.failure(e)
             }
         }
@@ -128,10 +113,11 @@ object IssueRepository {
                 persistentCache.add(0, newIssue)
                 saveToDisk(context)
 
+                // Try syncing with Supabase cloud
                 try {
                     SupabaseClient.client.from("issues").insert(newIssue)
                 } catch (dbError: Exception) {
-                    Log.w("SupabaseSync", "Offline insertion recorded: ${dbError.localizedMessage}")
+                    Log.w("SupabaseSync", "Cloud sync offline, local persistence active: ${dbError.localizedMessage}")
                 }
 
                 Result.success(Unit)

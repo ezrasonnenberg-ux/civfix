@@ -1,28 +1,18 @@
 version: '3.8'
 
 services:
-  kong:
-    image: kong:2.8.1
-    ports:
-      - "8000:8000"
-    environment:
-      KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
-    volumes:
-      - ./volumes/kong/kong.yml:/var/lib/kong/kong.yml
-    restart: unless-stopped
-
-  db:
+  civicfix-db:
     image: postgres:15-alpine
+    container_name: civfix_database_container
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: postgres
-      POSTGRES_PASSWORD: your-super-secret-and-long-postgres-password
+      POSTGRES_DB: civfix_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secure_password_123
     volumes:
-      - db-data:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
 
 volumes:
-  db-data:
+  pgdata:
