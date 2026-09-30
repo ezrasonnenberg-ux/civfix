@@ -11,7 +11,7 @@ import io.github.jan.supabase.storage.Storage
 
 object SupabaseClient {
     private const val SUPABASE_URL = "https://wfozmdmivhhfuwxmjyqo.supabase.co"
-    private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_D2xvHK80xjWazcfXLWti_g_zcqAkpb_" // Full key here
+    private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_D2xvHK80xjWazcfXLWti_g_zcqAkpb_"
 
     val client = createSupabaseClient(
         supabaseUrl = SUPABASE_URL,

@@ -1,7 +1,12 @@
 package com.example.civfix.data
 
 import kotlinx.serialization.Serializable
+//import kotlinx.serialization.Transient
 import kotlinx.serialization.InternalSerializationApi
+
+// ==========================================
+// MARK: - Enums
+// ==========================================
 
 @Serializable
 enum class IssueCategory(val displayName: String) {
@@ -29,10 +34,14 @@ enum class IssueStatus(val displayName: String) {
     RESOLVED("Resolved")
 }
 
+// ==========================================
+// MARK: - Core Issue Data Class
+// ==========================================
+
 @Serializable
 @OptIn(InternalSerializationApi::class)
 data class Issue(
-    val id: String = java.util.UUID.randomUUID().toString(), //
+    val id: String = java.util.UUID.randomUUID().toString(),
     val user_id: String? = null,
     val title: String,
     val category: String,
@@ -40,8 +49,8 @@ data class Issue(
     val severity: String,
     val status: String = "Pending",
     val latitude: Double,
-    val createdAtTimestamp: Long = System.currentTimeMillis(),
     val longitude: Double,
     val address_text: String,
-    val upvotes_count: Int = 0
+    val upvotes_count: Int = 0,
+    val createdAtTimestamp: Long = System.currentTimeMillis()
 )

@@ -56,7 +56,7 @@ fun IssueCardItem(
                 StatusBadge(status = issue.status)
 
                 Text(
-                    text = formatTimeAgo(issue.createdAtTimestamp), // Restored dynamic elapsed time
+                    text = formatTimeAgo(issue.createdAtTimestamp),
                     fontSize = 12.sp,
                     color = Color.Gray
                 )
@@ -152,18 +152,21 @@ fun IssueCardItem(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    // Dynamic workflow action button text based on current status
-                    val isPending = issue.status.equals("Pending", ignoreCase = true)
-                    val actionButtonText = if (isPending) "Start Progress" else "Mark Resolved"
-                    val actionButtonColor = if (isPending) Color(0xFF1C7ED6) else Color(0xFF2B8A3E)
+                    // Only display action button if the task is NOT resolved yet!
+                    val isResolved = issue.status.equals("Resolved", ignoreCase = true)
+                    if (!isResolved) {
+                        val isPending = issue.status.equals("Pending", ignoreCase = true)
+                        val actionButtonText = if (isPending) "Start Progress" else "Mark Resolved"
+                        val actionButtonColor = if (isPending) Color(0xFF1C7ED6) else Color(0xFF2B8A3E)
 
-                    TextButton(onClick = onResolveClicked) {
-                        Text(
-                            text = actionButtonText,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = actionButtonColor
-                        )
+                        TextButton(onClick = onResolveClicked) {
+                            Text(
+                                text = actionButtonText,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = actionButtonColor
+                            )
+                        }
                     }
 
                     IconButton(onClick = onShareClicked) {

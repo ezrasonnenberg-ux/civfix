@@ -1,6 +1,8 @@
 package com.example.civfix.ui.screens
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,9 +26,9 @@ import com.example.civfix.ui.components.common.ButtonStyle
 import com.example.civfix.ui.components.report.CategorySelectorGrid
 import com.example.civfix.ui.components.report.LocationVerificationBox
 import com.example.civfix.ui.components.report.VisualProofUploader
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.withContext
 
 // ==========================================
 // MARK: - Report Form Screen Component
@@ -42,20 +44,32 @@ fun ReportFormScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    // Form state variables starting completely blank/clean
+    // Form inputs and selection states
     var selectedCategory by remember { mutableStateOf(IssueCategory.POTHOLE) }
-    var photoCount by remember { mutableStateOf(0) } // Starts with 0 photos
+    var hasPhotoSelected by remember { mutableStateOf(false) }
     var selectedSeverity by remember { mutableStateOf(IssueSeverity.HIGH) }
-    var addressText by remember { mutableStateOf("Tap 'Current' to fetch GPS location") } // Clear mock address
-    var currentLatitude by remember { mutableStateOf(0.0) }
-    var currentLongitude by remember { mutableStateOf(0.0) }
+    var addressText by remember { mutableStateOf("Tap 'Current' to fetch GPS location") }
+    var currentLatitude by remember { mutableStateOf(-33.9221) }
+    var currentLongitude by remember { mutableStateOf(18.4231) }
 
-    // Independent text inputs
     var issueTitleInput by remember { mutableStateOf("") }
     var issueDescriptionInput by remember { mutableStateOf("") }
     var smsNotificationsEnabled by remember { mutableStateOf(true) }
 
+    // Submission guard to prevent double-tap duplicates
+    var isSubmitting by remember { mutableStateOf(false) }
+
     val primaryBlue = Color(0xFF004AAD)
+
+    // Gallery Picker launcher
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            hasPhotoSelected = true
+            Toast.makeText(context, "Photo attached successfully", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -115,18 +129,6 @@ fun ReportFormScreen(
                 fontWeight = FontWeight.Bold,
                 color = Color.Black
             )
-
-            var hasPhotoSelected by remember { mutableStateOf(false) }
-            // Native gallery picker contract kept cleanly at the screen level
-            val galleryLauncher = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.GetContent()
-            ) { uri ->
-                if (uri != null) {
-                    hasPhotoSelected = true
-                    Toast.makeText(context, "Photo attached successfully", Toast.LENGTH_SHORT).show()
-                }
-            }
-
             VisualProofUploader(
                 hasPhotoSelected = hasPhotoSelected,
                 onRetakeClicked = { hasPhotoSelected = false },
@@ -181,7 +183,7 @@ fun ReportFormScreen(
                 )
             }
 
-            // 4. Location Verification Section with Live GPS Tracking
+            // 4. Location Verification Section
             LocationVerificationBox(
                 addressText = addressText,
                 onAddressUpdated = { newAddress, lat, lng ->
@@ -189,7 +191,7 @@ fun ReportFormScreen(
                     currentLatitude = lat
                     currentLongitude = lng
                 },
-                onAdjustClicked = { /* Handle map manual adjust */ }
+                onAdjustClicked = { /* Handle manual adjust */ }
             )
 
             // 5. Title Input Field
@@ -261,17 +263,21 @@ fun ReportFormScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 8. Submit CTA Button with Persistent Local Storage Logic
+            // 8. Submit CTA Button with Debounce Protection & Asynchronous Dispatch
             CivFixButton(
-                buttonText = "Submit CivFix Report",
+                buttonText = if (isSubmitting) "Submitting..." else "Submit CivFix Report",
+                isButtonEnabled = !isSubmitting,
                 onClickAction = {
+                    if (isSubmitting) return@CivFixButton
+
                     if (issueTitleInput.isBlank() || issueDescriptionInput.isBlank()) {
                         Toast.makeText(context, "Please fill in all required fields", Toast.LENGTH_SHORT).show()
                         return@CivFixButton
                     }
 
-                    coroutineScope.launch {
-                        // Pass 'context = context' here so it persists to disk!
+                    isSubmitting = true
+
+                    coroutineScope.launch(Dispatchers.IO) {
                         val result = IssueRepository.insertIssue(
                             context = context,
                             title = issueTitleInput,
@@ -283,17 +289,21 @@ fun ReportFormScreen(
                             addressText = addressText
                         )
 
-                        if (result.isSuccess) {
-                            Toast.makeText(context, "Report saved and persisted successfully!", Toast.LENGTH_SHORT).show()
-                            onSubmitSuccess()
-                        } else {
-                            val errorMsg = result.exceptionOrNull()?.localizedMessage ?: "Unknown database error"
-                            Toast.makeText(context, "Failed: $errorMsg", Toast.LENGTH_LONG).show()
+                        withContext(Dispatchers.Main) {
+                            isSubmitting = false
+                            if (result.isSuccess) {
+                                Toast.makeText(context, "Report submitted successfully!", Toast.LENGTH_SHORT).show()
+                                onSubmitSuccess()
+                            } else {
+                                val errorMsg = result.exceptionOrNull()?.localizedMessage ?: "Unknown error"
+                                Toast.makeText(context, "Failed: $errorMsg", Toast.LENGTH_LONG).show()
+                            }
                         }
                     }
                 },
                 style = ButtonStyle.PRIMARY_CTA
             )
+
             Spacer(modifier = Modifier.height(20.dp))
         }
     }

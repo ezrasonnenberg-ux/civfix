@@ -7,8 +7,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,13 +21,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.example.civfix.data.DummyDataRepository
+import com.example.civfix.data.Issue
 import com.example.civfix.data.IssueRepository
 import com.example.civfix.ui.components.common.CivFixBottomBar
+import com.example.civfix.ui.components.common.CivFixButton
 import com.example.civfix.ui.components.common.CivFixTopAppBar
 import com.example.civfix.ui.components.common.Screen
 import com.example.civfix.ui.components.feed.IssueCardItem
 import com.example.civfix.ui.components.feed.SearchAndFilterHeader
+import com.example.civfix.ui.components.feed.StatusBadge
 import com.example.civfix.ui.screens.MapScreen
 import com.example.civfix.ui.screens.ProfileScreen
 import com.example.civfix.ui.screens.ReportFormScreen
@@ -41,7 +48,7 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier.fillMaxSize(),
                 color = Color(0xFFF8F9FA)
             ) {
-                CivicFixMainApp()
+                CivFixMainApp()
             }
         }
     }
@@ -52,15 +59,17 @@ class MainActivity : ComponentActivity() {
 // ==========================================
 
 @Composable
-fun CivicFixMainApp() {
+fun CivFixMainApp() {
     var currentRoute by remember { mutableStateOf(Screen.Feed.route) }
     var isReportFormOpen by remember { mutableStateOf(false) }
+    var detailedReportToShow by remember { mutableStateOf<Issue?>(null) }
 
-    // Single source of truth from repository cache managed by state
+    // Single source of truth from repository cache
     var issueList by remember { mutableStateOf(IssueRepository.getCachedIssues()) }
 
     val primaryBlue = Color(0xFF004AAD)
 
+    // Log An Issue Form Modal
     if (isReportFormOpen) {
         ReportFormScreen(
             onCloseClicked = { isReportFormOpen = false },
@@ -70,6 +79,14 @@ fun CivicFixMainApp() {
             }
         )
         return
+    }
+
+    // Full Report Details Modal Dialog
+    if (detailedReportToShow != null) {
+        FullReportDetailsDialog(
+            issue = detailedReportToShow!!,
+            onDismiss = { detailedReportToShow = null }
+        )
     }
 
     Scaffold(
@@ -104,22 +121,136 @@ fun CivicFixMainApp() {
                 Screen.Feed.route -> FeedScreenContent(
                     issueList = issueList,
                     onIssueActionTriggered = {
-                        // Refresh the parent root state list safely
                         issueList = IssueRepository.getCachedIssues().toMutableList()
                     },
                     onMapButtonClicked = { currentRoute = Screen.Map.route }
                 )
-                Screen.Map.route -> MapScreen(
-                    issues = issueList,
-                    onViewFullReportClicked = { issue ->
-                        currentRoute = Screen.Feed.route
-                    }
-                )
+                Screen.Map.route -> {
+                    println("[CIVFIX_LOG] 3. USER OPENED MAP SCREEN. Total active issues passed to map: ${issueList.size}")
+                    MapScreen(
+                        issues = issueList,
+                        onViewFullReportClicked = { issue ->
+                            println("[CIVFIX_LOG] 4. USER CLICKED 'VIEW FULL REPORT': ID=${issue.id}, Title='${issue.title}'")
+                            detailedReportToShow = issue
+                        }
+                    )
+                }
                 Screen.Profile.route -> ProfileScreen(
                     onLoadDemoDataClicked = {
-                        DummyDataRepository.getInitialCommunityIssues()
+                        DummyDataRepository.getInitialCommunityIssues().forEach { demo ->
+                            // Seed into repository
+                        }
                         issueList = IssueRepository.getCachedIssues().toMutableList()
                     }
+                )
+            }
+        }
+    }
+}
+
+// ==========================================
+// MARK: - Full Report Details Modal Dialog
+// ==========================================
+
+@Composable
+fun FullReportDetailsDialog(
+    issue: Issue,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    StatusBadge(status = issue.status)
+
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close Dialog",
+                            tint = Color.Gray
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = issue.title,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "Category: ${issue.category}  •  Severity: ${issue.severity}",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.Gray
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "Description",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.DarkGray
+                )
+                Text(
+                    text = if (issue.description.isNotBlank()) issue.description else "No additional description provided.",
+                    fontSize = 13.sp,
+                    color = Color.DarkGray,
+                    lineHeight = 18.sp
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = "Location",
+                        tint = Color(0xFF004AAD),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = issue.address_text,
+                        fontSize = 12.sp,
+                        color = Color.Black,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "GPS: Lat ${issue.latitude}, Lng ${issue.longitude}",
+                    fontSize = 11.sp,
+                    color = Color.Gray
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                CivFixButton(
+                    buttonText = "Close Details",
+                    onClickAction = onDismiss
                 )
             }
         }
@@ -133,7 +264,7 @@ fun CivicFixMainApp() {
 @Composable
 fun FeedScreenContent(
     issueList: List<com.example.civfix.data.Issue>,
-    onIssueActionTriggered: () -> Unit, // Callback to update parent state
+    onIssueActionTriggered: () -> Unit,
     onMapButtonClicked: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -142,7 +273,6 @@ fun FeedScreenContent(
     val context = LocalContext.current
 
     val filteredIssues = issueList.filter { issue ->
-        val isNotArchived = !issue.status.equals("Resolved", ignoreCase = true)
         val matchesSearch = issue.title.contains(searchQuery, ignoreCase = true) ||
                 issue.address_text.contains(searchQuery, ignoreCase = true)
         val matchesCategory = when (selectedCategory) {
@@ -154,7 +284,7 @@ fun FeedScreenContent(
             "In Progress" -> issue.status.equals("In Progress", ignoreCase = true)
             else -> true
         }
-        isNotArchived && matchesSearch && matchesCategory
+        matchesSearch && matchesCategory
     }
 
     Column(
@@ -232,7 +362,7 @@ fun FeedScreenContent(
                             if (issue.id != null) {
                                 coroutineScope.launch {
                                     IssueRepository.progressIssueStatus(context, issue.id)
-                                    onIssueActionTriggered() // Safely triggers parent state reload
+                                    onIssueActionTriggered()
                                 }
                             }
                         }
