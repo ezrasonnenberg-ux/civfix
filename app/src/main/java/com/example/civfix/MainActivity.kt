@@ -64,8 +64,20 @@ fun CivFixMainApp() {
     var isReportFormOpen by remember { mutableStateOf(false) }
     var detailedReportToShow by remember { mutableStateOf<Issue?>(null) }
 
-    // Single source of truth from repository cache
+    // Start with local cache immediately so the UI doesn't stutter on open
     var issueList by remember { mutableStateOf(IssueRepository.getCachedIssues()) }
+
+    // ==========================================
+    // READ FROM DATABASE ON STARTUP EVERY TIME
+    // ==========================================
+    LaunchedEffect(Unit) {
+        println("[CIVFIX_LOG] Fetching latest issues from Supabase DB on startup...")
+        val freshList = IssueRepository.fetchFreshIssuesFromDatabase()
+        if (freshList.isNotEmpty()) {
+            issueList = freshList.toMutableList()
+            println("[CIVFIX_LOG] Successfully synced ${freshList.size} issues from cloud DB into UI!")
+        }
+    }
 
     val primaryBlue = Color(0xFF004AAD)
 
