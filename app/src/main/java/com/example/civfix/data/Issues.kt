@@ -15,11 +15,31 @@ enum class IssueCategory(val displayName: String) {
 }
 
 @Serializable
-enum class IssueSeverity(val displayName: String, val tier: String) {
-    LOW("Low / Cosmetic", "Priority Tier 4"),
-    MEDIUM("Medium / Standard", "Priority Tier 3"),
-    HIGH("High / Urgent", "Priority Tier 2"),
-    CRITICAL("Critical / Danger", "Priority Tier 1")
+enum class IssueSeverity(
+    val displayName: String,
+    val tier: String,
+    val slaDescription: String
+) {
+    LOW(
+        displayName = "Low / Cosmetic",
+        tier = "Priority Tier 4",
+        slaDescription = "Minor cosmetic issue or general maintenance requirement. Scheduled during regular municipal maintenance cycles within 7–14 business days."
+    ),
+    MEDIUM(
+        displayName = "Medium / Standard",
+        tier = "Priority Tier 3",
+        slaDescription = "Standard municipal service request. Poses no immediate bodily danger but impacts neighborhood utility. Typically inspected within 3–5 business days."
+    ),
+    HIGH(
+        displayName = "High / Urgent",
+        tier = "Priority Tier 2",
+        slaDescription = "Requires urgent municipal attention: Hazard poses direct risk of vehicular damage or pedestrian harm. Dispatched within 24–48 hours."
+    ),
+    CRITICAL(
+        displayName = "Critical / Danger",
+        tier = "Priority Tier 1",
+        slaDescription = "Immediate emergency hazard: Poses severe, active risk to public safety or major infrastructure failure. Flagged for emergency escalation within 2–6 hours."
+    )
 }
 
 @Serializable

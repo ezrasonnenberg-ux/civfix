@@ -71,19 +71,29 @@ object IssueRepository {
     }
 
     // Pull central data directly from Supabase DB
-    suspend fun fetchFreshIssuesFromDatabase(): List<Issue> {
+    suspend fun fetchFreshIssuesFromDatabase(context: Context?): List<Issue> {
         return withContext(Dispatchers.IO) {
             try {
-                val remoteIssues = SupabaseClient.client
-                    .from("issues")
-                    .select()
-                    .decodeList<Issue>()
+                println("[CIVFIX_LOG] Fetching directly from Supabase 'issues' table...")
+                val remoteIssues = withTimeout(6000L) {
+                    SupabaseClient.client
+                        .from("issues")
+                        .select()
+                        .decodeList<Issue>()
+                }
 
+                println("[CIVFIX_LOG] Fetched ${remoteIssues.size} rows from Supabase!")
+
+                // Clear out any old local junk and replace with the true DB records
                 persistentCache.clear()
                 persistentCache.addAll(remoteIssues.distinctBy { it.id })
+
+                // Save the true DB records to local disk
+                saveToDisk(context)
+
                 persistentCache
             } catch (e: Exception) {
-                Log.w("SupabaseFetch", "Using local cache due to network: ${e.localizedMessage}")
+                println("[CIVFIX_LOG] Supabase fetch failed: ${e.message}. Using local disk cache.")
                 persistentCache
             }
         }

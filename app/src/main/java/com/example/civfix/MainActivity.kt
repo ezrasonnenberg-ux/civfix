@@ -25,6 +25,7 @@ import androidx.compose.ui.window.Dialog
 import com.example.civfix.data.DummyDataRepository
 import com.example.civfix.data.Issue
 import com.example.civfix.data.IssueRepository
+import com.example.civfix.data.LocationHelper
 import com.example.civfix.ui.components.common.CivFixBottomBar
 import com.example.civfix.ui.components.common.CivFixButton
 import com.example.civfix.ui.components.common.CivFixTopAppBar
@@ -36,6 +37,8 @@ import com.example.civfix.ui.screens.MapScreen
 import com.example.civfix.ui.screens.ProfileScreen
 import com.example.civfix.ui.screens.ReportFormScreen
 import kotlinx.coroutines.launch
+
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,9 +73,12 @@ fun CivFixMainApp() {
     // ==========================================
     // READ FROM DATABASE ON STARTUP EVERY TIME
     // ==========================================
+    val context = LocalContext.current
+
     LaunchedEffect(Unit) {
         println("[CIVFIX_LOG] Fetching latest issues from Supabase DB on startup...")
-        val freshList = IssueRepository.fetchFreshIssuesFromDatabase()
+        // context
+        val freshList = IssueRepository.fetchFreshIssuesFromDatabase(context)
         if (freshList.isNotEmpty()) {
             issueList = freshList.toMutableList()
             println("[CIVFIX_LOG] Successfully synced ${freshList.size} issues from cloud DB into UI!")
@@ -279,14 +285,28 @@ fun FeedScreenContent(
     onIssueActionTriggered: () -> Unit,
     onMapButtonClicked: () -> Unit
 ) {
+    // 1. Declare state variables FIRST
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    // 2. Define location filter constants
+    val userLat = -33.9221
+    val userLng = 18.4231
+    val maxRadiusMeters = 10_000f // 10 km limit
+
+    // 3. Filter using the state variables declared above
     val filteredIssues = issueList.filter { issue ->
+        val distance = LocationHelper.calculateDistanceMeters(
+            userLat, userLng,
+            issue.latitude, issue.longitude
+        )
+        val isWithinVicinity = distance <= maxRadiusMeters
+
         val matchesSearch = issue.title.contains(searchQuery, ignoreCase = true) ||
                 issue.address_text.contains(searchQuery, ignoreCase = true)
+
         val matchesCategory = when (selectedCategory) {
             "All" -> true
             "Potholes" -> issue.category.contains("Pothole", ignoreCase = true)
@@ -296,7 +316,8 @@ fun FeedScreenContent(
             "In Progress" -> issue.status.equals("In Progress", ignoreCase = true)
             else -> true
         }
-        matchesSearch && matchesCategory
+
+        isWithinVicinity && matchesSearch && matchesCategory
     }
 
     Column(
@@ -356,7 +377,11 @@ fun FeedScreenContent(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "No matching reports for this filter.", fontSize = 14.sp, color = Color.Gray)
+                Text(
+                    text = "No matching reports within 10 km.",
+                    fontSize = 14.sp,
+                    color = Color.Gray
+                )
             }
         } else {
             LazyColumn(
@@ -371,7 +396,7 @@ fun FeedScreenContent(
                         onUpvoteClicked = {},
                         onShareClicked = {},
                         onResolveClicked = {
-                            if (issue.id != null) {
+                            if (issue.id.isNotBlank()) {
                                 coroutineScope.launch {
                                     IssueRepository.progressIssueStatus(context, issue.id)
                                     onIssueActionTriggered()

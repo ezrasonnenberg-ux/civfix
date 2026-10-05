@@ -161,7 +161,7 @@ fun ReportFormScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = severity.displayName.substringBefore(" /"),
+                                text = selectedSeverity.slaDescription,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isSelected) Color.White else Color.DarkGray

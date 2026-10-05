@@ -45,5 +45,36 @@ object LocationHelper {
                 "Lat: 45.5152, Lng: -122.6784 (Emulator GPS Mock)"
             )
         }
+
+        // Returns distance in meters between two GPS coordinates using Android's native calculation
+        fun calculateDistanceMeters(
+            startLat: Double,
+            startLng: Double,
+            endLat: Double,
+            endLng: Double
+        ): Float {
+            val results = FloatArray(1)
+            android.location.Location.distanceBetween(startLat, startLng, endLat, endLng, results)
+            return results[0]
+        }
+
+        // Formats meters into readable "0.5 km away" or "8.2 km away"
+        fun formatDistance(meters: Float): String {
+            return if (meters < 1000) {
+                "${meters.toInt()} m away"
+            } else {
+                "%.1f km away".format(meters / 1000f)
+            }
+        }
     }
-}
+        fun calculateDistanceMeters(
+            startLat: Double,
+            startLng: Double,
+            endLat: Double,
+            endLng: Double
+        ): Float {
+            val results = FloatArray(1)
+            android.location.Location.distanceBetween(startLat, startLng, endLat, endLng, results)
+            return results[0]
+        }
+    }
