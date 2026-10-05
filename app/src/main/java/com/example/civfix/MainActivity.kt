@@ -279,46 +279,73 @@ fun FullReportDetailsDialog(
 // MARK: - Feed Screen Content Wrapper
 // ==========================================
 
+// ==========================================
+// MARK: - Feed Screen Content (Live GPS & Sorted Newest-First)
+// ==========================================
+
 @Composable
 fun FeedScreenContent(
     issueList: List<com.example.civfix.data.Issue>,
     onIssueActionTriggered: () -> Unit,
     onMapButtonClicked: () -> Unit
 ) {
-    // 1. Declare state variables FIRST
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // 2. Define location filter constants
-    val userLat = -33.9221
-    val userLng = 18.4231
+    // Live Device Coordinates (defaults to Cape Town only until live GPS resolves)
+    var deviceLat by remember { mutableStateOf(-33.9221) }
+    var deviceLng by remember { mutableStateOf(18.4231) }
+    var hasLiveLocation by remember { mutableStateOf(false) }
+
+    // Fetch live device location dynamically on screen load
+    LaunchedEffect(Unit) {
+        LocationHelper.fetchCurrentLocation(
+            context = context,
+            onLocationFetched = { lat, lng, _ ->
+                deviceLat = lat
+                deviceLng = lng
+                hasLiveLocation = true
+                println("[CIVFIX_LOG] Feed updated with live device GPS: Lat=$lat, Lng=$lng")
+            },
+            onError = {
+                // If GPS permission not granted or emulator has no fix, keep fallback
+                hasLiveLocation = false
+                println("[CIVFIX_LOG] Feed using fallback GPS location")
+            }
+        )
+    }
+
     val maxRadiusMeters = 10_000f // 10 km limit
 
-    // 3. Filter using the state variables declared above
-    val filteredIssues = issueList.filter { issue ->
-        val distance = LocationHelper.calculateDistanceMeters(
-            userLat, userLng,
-            issue.latitude, issue.longitude
-        )
-        val isWithinVicinity = distance <= maxRadiusMeters
+    // 1. Filter by 10 km proximity, search query, and category
+    val filteredIssues = issueList
+        .filter { issue ->
+            // Proximity check: only filter by distance if live location is active
+            val distance = LocationHelper.calculateDistanceMeters(
+                deviceLat, deviceLng,
+                issue.latitude, issue.longitude
+            )
+            val isWithinVicinity = if (hasLiveLocation) distance <= maxRadiusMeters else true
 
-        val matchesSearch = issue.title.contains(searchQuery, ignoreCase = true) ||
-                issue.address_text.contains(searchQuery, ignoreCase = true)
+            val matchesSearch = issue.title.contains(searchQuery, ignoreCase = true) ||
+                    issue.address_text.contains(searchQuery, ignoreCase = true)
 
-        val matchesCategory = when (selectedCategory) {
-            "All" -> true
-            "Potholes" -> issue.category.contains("Pothole", ignoreCase = true)
-            "Streetlights" -> issue.category.contains("Streetlight", ignoreCase = true)
-            "Graffiti" -> issue.category.contains("Graffiti", ignoreCase = true)
-            "Sanitation" -> issue.category.contains("Sanitation", ignoreCase = true)
-            "In Progress" -> issue.status.equals("In Progress", ignoreCase = true)
-            else -> true
+            val matchesCategory = when (selectedCategory) {
+                "All" -> true
+                "Potholes" -> issue.category.contains("Pothole", ignoreCase = true)
+                "Streetlights" -> issue.category.contains("Streetlight", ignoreCase = true)
+                "Graffiti" -> issue.category.contains("Graffiti", ignoreCase = true)
+                "Sanitation" -> issue.category.contains("Sanitation", ignoreCase = true)
+                "In Progress" -> issue.status.equals("In Progress", ignoreCase = true)
+                else -> true
+            }
+
+            isWithinVicinity && matchesSearch && matchesCategory
         }
-
-        isWithinVicinity && matchesSearch && matchesCategory
-    }
+        // 2. Sort NEWEST FIRST so new posts always appear at the top
+        .sortedByDescending { it.createdAtTimestamp }
 
     Column(
         modifier = Modifier

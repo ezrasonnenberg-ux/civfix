@@ -161,7 +161,7 @@ fun ReportFormScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = selectedSeverity.slaDescription,
+                                text = severity.displayName.substringBefore(" /"),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isSelected) Color.White else Color.DarkGray
@@ -176,7 +176,7 @@ fun ReportFormScreen(
                 color = Color(0xFFE7F5FF)
             ) {
                 Text(
-                    text = "Requires urgent municipal attention: Hazard poses direct risk of vehicular damage or pedestrian harm. Dispatched within 24 hours.",
+                    text = selectedSeverity.slaDescription,
                     modifier = Modifier.padding(12.dp),
                     fontSize = 12.sp,
                     color = Color(0xFF1C7ED6)
