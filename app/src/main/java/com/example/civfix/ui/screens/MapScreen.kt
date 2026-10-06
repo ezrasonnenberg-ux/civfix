@@ -4,13 +4,8 @@ import android.view.ViewGroup
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,54 +16,49 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.civfix.data.Issue
+import com.example.civfix.data.IssueFilterManager
 import com.example.civfix.ui.components.common.CivFixButton
 import com.example.civfix.ui.components.common.ButtonStyle
 import com.example.civfix.ui.components.feed.StatusBadge
 
 // ==========================================
-// MARK: - Full Street Map Screen with Search & Filters
+// MARK: - Option A: Strict Location-Centric Map Screen
 // ==========================================
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(
     issues: List<Issue>,
+    userLat: Double,
+    userLng: Double,
     onViewFullReportClicked: (Issue) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val primaryBlue = Color(0xFF004AAD)
 
-    // Interactive Search and Filter states
-    var mapSearchQuery by remember { mutableStateOf("") }
-    var selectedFilterChip by remember { mutableStateOf("All") }
-
-    // Filter issues: only active (unresolved) AND matching search/chip
-    val activeIssues = issues.filter { issue ->
-        val isNotResolved = !issue.status.equals("Resolved", ignoreCase = true)
-        val matchesSearch = issue.title.contains(mapSearchQuery, ignoreCase = true) ||
-                issue.address_text.contains(mapSearchQuery, ignoreCase = true)
-        val matchesChip = when (selectedFilterChip) {
-            "All" -> true
-            "Hazards" -> issue.severity.contains("High", ignoreCase = true) || issue.severity.contains("Critical", ignoreCase = true)
-            "Lighting" -> issue.category.contains("Streetlight", ignoreCase = true)
-            "Sanitation" -> issue.category.contains("Sanitation", ignoreCase = true)
-            "Water / Drain" -> issue.category.contains("Water", ignoreCase = true)
-            else -> true
-        }
-        isNotResolved && matchesSearch && matchesChip
+    // Single source of truth: 10km vicinity & active-only
+    val mapIssues = remember(issues, userLat, userLng) {
+        IssueFilterManager.filterForMap(
+            allIssues = issues,
+            userLat = userLat,
+            userLng = userLng
+        )
     }
 
-    var selectedIssue by remember(activeIssues) {
-        mutableStateOf(activeIssues.firstOrNull())
+    var selectedIssue by remember(mapIssues) {
+        mutableStateOf(mapIssues.firstOrNull())
     }
 
-    val centerLat = selectedIssue?.latitude ?: -33.9221
-    val centerLng = selectedIssue?.longitude ?: 18.4231
+    // MAP ALWAYS CENTERS ON THE USER'S LOCATION
+
+    val centerLat = userLat
+    val centerLng = userLng
 
     Box(
         modifier = modifier.fillMaxSize()
     ) {
-        if (activeIssues.isEmpty()) {
+        if (mapIssues.isEmpty()) {
+            // Clean local empty state
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -79,17 +69,17 @@ fun MapScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.padding(32.dp)
                 ) {
-                    Text(text = "🎉", fontSize = 36.sp)
+                    Text(text = "📍", fontSize = 36.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "No active map markers",
+                        text = "No active hazards in your 10 km area",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.DarkGray
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "All issues are resolved or no reports match your current filter.",
+                        text = "All reported issues in your vicinity have been resolved or none exist.",
                         fontSize = 13.sp,
                         color = Color.Gray,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -97,7 +87,7 @@ fun MapScreen(
                 }
             }
         } else {
-            // Real OpenStreetMap Tile View
+            // Live map centered on the USER, showing local pins
             AndroidView(
                 factory = { context ->
                     WebView(context).apply {
@@ -112,105 +102,38 @@ fun MapScreen(
                             userAgentString = "CivFix-MobileApp/1.0 (Android; Educational-Project)"
                         }
 
-                        val mapUrl = "https://www.openstreetmap.org/export/embed.html?bbox=${centerLng - 0.01}%2C${centerLat - 0.01}%2C${centerLng + 0.01}%2C${centerLat + 0.01}&layer=mapnik&marker=$centerLat%2C$centerLng"
+                        val mapUrl = "https://www.openstreetmap.org/export/embed.html?bbox=${centerLng - 0.02}%2C${centerLat - 0.02}%2C${centerLng + 0.02}%2C${centerLat + 0.02}&layer=mapnik&marker=$centerLat%2C$centerLng"
                         loadUrl(mapUrl)
                     }
                 },
                 update = { webView ->
-                    val mapUrl = "https://www.openstreetmap.org/export/embed.html?bbox=${centerLng - 0.01}%2C${centerLat - 0.01}%2C${centerLng + 0.01}%2C${centerLat + 0.01}&layer=mapnik&marker=$centerLat%2C$centerLng"
+                    val mapUrl = "https://www.openstreetmap.org/export/embed.html?bbox=${centerLng - 0.02}%2C${centerLat - 0.02}%2C${centerLng + 0.02}%2C${centerLat + 0.02}&layer=mapnik&marker=$centerLat%2C$centerLng"
                     webView.loadUrl(mapUrl)
                 },
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Active counter badge
+            // Local vicinity counter
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(start = 16.dp, top = 90.dp), // Pushed below the search overlay
+                    .padding(16.dp),
                 shape = RoundedCornerShape(20.dp),
                 color = Color.White,
                 shadowElevation = 4.dp
             ) {
                 Text(
-                    text = "📍 Live Grid (${activeIssues.size} Active)",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-                    fontSize = 11.sp,
+                    text = "📍 Your 10 km Area (${mapIssues.size} Active)",
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = primaryBlue
                 )
             }
         }
 
-        // Top Search Bar and Filter Chips Floating Overlay
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-                .align(Alignment.TopCenter)
-        ) {
-            OutlinedTextField(
-                value = mapSearchQuery,
-                onValueChange = { mapSearchQuery = it },
-                placeholder = { Text("Filter map by address or keyword...") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = Color.Gray
-                    )
-                },
-                trailingIcon = {
-                    if (mapSearchQuery.isNotEmpty()) {
-                        IconButton(onClick = { mapSearchQuery = "" }) {
-                            Icon(
-                                imageVector = Icons.Default.Clear,
-                                contentDescription = "Clear",
-                                tint = Color.Gray
-                            )
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedBorderColor = primaryBlue
-                ),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            val filterChips = listOf("All", "Hazards", "Lighting", "Sanitation", "Water / Drain")
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                filterChips.forEach { chip ->
-                    val isSelected = (chip == selectedFilterChip)
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { selectedFilterChip = chip },
-                        label = { Text(text = chip, fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = primaryBlue,
-                            selectedLabelColor = Color.White,
-                            containerColor = Color.White,
-                            labelColor = Color.DarkGray
-                        ),
-                        shape = RoundedCornerShape(20.dp)
-                    )
-                }
-            }
-        }
-
-        // Bottom Preview Card
-        if (selectedIssue != null && activeIssues.isNotEmpty()) {
+        // Bottom Preview Card (only if local issues exist)
+        if (selectedIssue != null && mapIssues.isNotEmpty()) {
             val issue = selectedIssue!!
             Card(
                 modifier = Modifier
@@ -253,11 +176,7 @@ fun MapScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "Lat: %.4f, Lng: %.4f • %d upvotes".format(
-                            issue.latitude,
-                            issue.longitude,
-                            issue.upvotes_count
-                        ),
+                        text = "${issue.address_text} • ${issue.upvotes_count} upvotes",
                         fontSize = 12.sp,
                         color = Color.Gray
                     )

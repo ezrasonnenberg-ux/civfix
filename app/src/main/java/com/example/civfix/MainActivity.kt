@@ -36,6 +36,7 @@ import com.example.civfix.ui.components.feed.StatusBadge
 import com.example.civfix.ui.screens.MapScreen
 import com.example.civfix.ui.screens.ProfileScreen
 import com.example.civfix.ui.screens.ReportFormScreen
+import com.example.civfix.data.IssueFilterManager
 import kotlinx.coroutines.launch
 
 
@@ -67,8 +68,13 @@ fun CivFixMainApp() {
     var isReportFormOpen by remember { mutableStateOf(false) }
     var detailedReportToShow by remember { mutableStateOf<Issue?>(null) }
 
+
     // Start with local cache immediately so the UI doesn't stutter on open
     var issueList by remember { mutableStateOf(IssueRepository.getCachedIssues()) }
+
+    // Maintain current device coordinates at the root level:
+    var userLat by remember { mutableStateOf(-33.9221) }
+    var userLng by remember { mutableStateOf(18.4231) }
 
     // ==========================================
     // READ FROM DATABASE ON STARTUP EVERY TIME
@@ -138,25 +144,31 @@ fun CivFixMainApp() {
             when (currentRoute) {
                 Screen.Feed.route -> FeedScreenContent(
                     issueList = issueList,
+                    userLat = userLat,
+                    userLng = userLng,
+                    onLocationUpdated = { lat, lng ->
+                        userLat = lat
+                        userLng = lng
+                    },
                     onIssueActionTriggered = {
                         issueList = IssueRepository.getCachedIssues().toMutableList()
                     },
                     onMapButtonClicked = { currentRoute = Screen.Map.route }
                 )
-                Screen.Map.route -> {
-                    println("[CIVFIX_LOG] 3. USER OPENED MAP SCREEN. Total active issues passed to map: ${issueList.size}")
-                    MapScreen(
-                        issues = issueList,
-                        onViewFullReportClicked = { issue ->
-                            println("[CIVFIX_LOG] 4. USER CLICKED 'VIEW FULL REPORT': ID=${issue.id}, Title='${issue.title}'")
-                            detailedReportToShow = issue
-                        }
-                    )
-                }
+
+                Screen.Map.route -> MapScreen(
+                    issues = issueList,
+                    userLat = userLat,
+                    userLng = userLng,
+                    onViewFullReportClicked = { issue ->
+                        detailedReportToShow = issue
+                    }
+                )
+
                 Screen.Profile.route -> ProfileScreen(
                     onLoadDemoDataClicked = {
-                        DummyDataRepository.getInitialCommunityIssues().forEach { demo ->
-                            // Seed into repository
+                        val demoItems = DummyDataRepository.getInitialCommunityIssues()
+                        demoItems.forEach { demo ->
                         }
                         issueList = IssueRepository.getCachedIssues().toMutableList()
                     }
@@ -283,9 +295,16 @@ fun FullReportDetailsDialog(
 // MARK: - Feed Screen Content (Live GPS & Sorted Newest-First)
 // ==========================================
 
+// ==========================================
+// MARK: - Feed Screen Content Wrapper (10 km Centralized Filter)
+// ==========================================
+
 @Composable
 fun FeedScreenContent(
     issueList: List<com.example.civfix.data.Issue>,
+    userLat: Double,
+    userLng: Double,
+    onLocationUpdated: (Double, Double) -> Unit,
     onIssueActionTriggered: () -> Unit,
     onMapButtonClicked: () -> Unit
 ) {
@@ -294,58 +313,27 @@ fun FeedScreenContent(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Live Device Coordinates (defaults to Cape Town only until live GPS resolves)
-    var deviceLat by remember { mutableStateOf(-33.9221) }
-    var deviceLng by remember { mutableStateOf(18.4231) }
-    var hasLiveLocation by remember { mutableStateOf(false) }
-
-    // Fetch live device location dynamically on screen load
+    // Query live location once on feed load and notify root
     LaunchedEffect(Unit) {
         LocationHelper.fetchCurrentLocation(
             context = context,
             onLocationFetched = { lat, lng, _ ->
-                deviceLat = lat
-                deviceLng = lng
-                hasLiveLocation = true
-                println("[CIVFIX_LOG] Feed updated with live device GPS: Lat=$lat, Lng=$lng")
+                onLocationUpdated(lat, lng)
             },
             onError = {
-                // If GPS permission not granted or emulator has no fix, keep fallback
-                hasLiveLocation = false
-                println("[CIVFIX_LOG] Feed using fallback GPS location")
+                // Falls back to existing userLat/userLng defaults
             }
         )
     }
 
-    val maxRadiusMeters = 10_000f // 10 km limit
-
-    // 1. Filter by 10 km proximity, search query, and category
-    val filteredIssues = issueList
-        .filter { issue ->
-            // Proximity check: only filter by distance if live location is active
-            val distance = LocationHelper.calculateDistanceMeters(
-                deviceLat, deviceLng,
-                issue.latitude, issue.longitude
-            )
-            val isWithinVicinity = if (hasLiveLocation) distance <= maxRadiusMeters else true
-
-            val matchesSearch = issue.title.contains(searchQuery, ignoreCase = true) ||
-                    issue.address_text.contains(searchQuery, ignoreCase = true)
-
-            val matchesCategory = when (selectedCategory) {
-                "All" -> true
-                "Potholes" -> issue.category.contains("Pothole", ignoreCase = true)
-                "Streetlights" -> issue.category.contains("Streetlight", ignoreCase = true)
-                "Graffiti" -> issue.category.contains("Graffiti", ignoreCase = true)
-                "Sanitation" -> issue.category.contains("Sanitation", ignoreCase = true)
-                "In Progress" -> issue.status.equals("In Progress", ignoreCase = true)
-                else -> true
-            }
-
-            isWithinVicinity && matchesSearch && matchesCategory
-        }
-        // 2. Sort NEWEST FIRST so new posts always appear at the top
-        .sortedByDescending { it.createdAtTimestamp }
+    // Single source of truth: 10 km vicinity filter from IssueFilterManager
+    val filteredIssues = IssueFilterManager.filterForFeed(
+        allIssues = issueList,
+        userLat = userLat,
+        userLng = userLng,
+        selectedCategory = selectedCategory,
+        searchQuery = searchQuery
+    )
 
     Column(
         modifier = Modifier
