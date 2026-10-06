@@ -1,9 +1,12 @@
 
 **                                   CivFix - Community Infrastructure Issue Reporting & Tracking App
 **
+
+Institution: IU International University of Applied Sciences 
+Student Name: Ezra Sonnenberg
+Matriculation No: 9219811
 Course Code: DLBSEPPSD01_E - Software Development  
-Degree Programme: B.Sc. Software Development / Computer Science  
-Institution: IU International University of Applied Sciences   
+Degree Programme: B.Sc. Software Development
 Professor: Christian Remfert
 
 Task: Task 1 - Development of a Mobile Application  
