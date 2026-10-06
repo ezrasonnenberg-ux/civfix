@@ -155,4 +155,4 @@ To run the JUnit test suite covering core domain classes and time calculations:
 
     Open Android Studio.
     In the Project pane, navigate to: app/src/test/java/com/example/civfix/CivFixUnitTests.kt.
-    Right-click the file and select Run 'CivFixUnitTests'.
+    Right-click the file and select Run 'CivicFixUnitTests'.
