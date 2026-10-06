@@ -27,6 +27,24 @@ class CivicFixUnitTests {
     }
 
     @Test
+    fun testInputSanitizer_stripsHtmlAndTrims() {
+        val rawTitle = "   <script>alert('pothole')</script>Deep Road Crater   "
+        val cleanTitle = com.example.civfix.data.InputSanitizer.sanitizeTitle(rawTitle)
+
+        org.junit.Assert.assertEquals("Deep Road Crater", cleanTitle)
+    }
+
+    @Test
+    fun testInputSanitizer_validationFailsOnBlankInput() {
+        val blankTitle = "     "
+        val validDescription = "Streetlight is out completely."
+        val result = com.example.civfix.data.InputSanitizer.validateReportInput(blankTitle, validDescription)
+
+        org.junit.Assert.assertTrue(result is com.example.civfix.data.ValidationResult.Error)
+    }
+
+
+    @Test
     fun testIssueDataModel_defaultValues() {
         val testIssue = Issue(
             title = "Broken Traffic Light",

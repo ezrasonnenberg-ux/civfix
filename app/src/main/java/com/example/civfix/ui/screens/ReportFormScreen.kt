@@ -26,6 +26,8 @@ import com.example.civfix.ui.components.common.ButtonStyle
 import com.example.civfix.ui.components.report.CategorySelectorGrid
 import com.example.civfix.ui.components.report.LocationVerificationBox
 import com.example.civfix.ui.components.report.VisualProofUploader
+import com.example.civfix.data.InputSanitizer
+import com.example.civfix.data.ValidationResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -257,54 +259,78 @@ fun ReportFormScreen(
                 Switch(
                     checked = smsNotificationsEnabled,
                     onCheckedChange = { smsNotificationsEnabled = it },
-                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = primaryBlue)
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = primaryBlue
+                    )
                 )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 8. Submit CTA Button with Debounce Protection & Asynchronous Dispatch
+            // 8. Submit CTA Button with Sanitization & Debounce Protection
             CivFixButton(
                 buttonText = if (isSubmitting) "Submitting..." else "Submit CivFix Report",
                 isButtonEnabled = !isSubmitting,
                 onClickAction = {
                     if (isSubmitting) return@CivFixButton
 
-                    if (issueTitleInput.isBlank() || issueDescriptionInput.isBlank()) {
-                        Toast.makeText(context, "Please fill in all required fields", Toast.LENGTH_SHORT).show()
-                        return@CivFixButton
-                    }
+                    // 1. Run Input Sanitization & Validation
+                    val validation = InputSanitizer.validateReportInput(
+                        title = issueTitleInput,
+                        description = issueDescriptionInput
+                    )
 
-                    isSubmitting = true
+                    when (validation) {
+                        is ValidationResult.Error -> {
+                            Toast.makeText(context, validation.errorMessage, Toast.LENGTH_SHORT)
+                                .show()
+                            return@CivFixButton
+                        }
 
-                    coroutineScope.launch(Dispatchers.IO) {
-                        val result = IssueRepository.insertIssue(
-                            context = context,
-                            title = issueTitleInput,
-                            category = selectedCategory.displayName,
-                            description = issueDescriptionInput,
-                            severity = selectedSeverity.displayName,
-                            latitude = currentLatitude,
-                            longitude = currentLongitude,
-                            addressText = addressText
-                        )
+                        is ValidationResult.Success -> {
+                            val cleanTitle = validation.sanitizedTitle
+                            val cleanDescription = validation.sanitizedDescription
 
-                        withContext(Dispatchers.Main) {
-                            isSubmitting = false
-                            if (result.isSuccess) {
-                                Toast.makeText(context, "Report submitted successfully!", Toast.LENGTH_SHORT).show()
-                                onSubmitSuccess()
-                            } else {
-                                val errorMsg = result.exceptionOrNull()?.localizedMessage ?: "Unknown error"
-                                Toast.makeText(context, "Failed: $errorMsg", Toast.LENGTH_LONG).show()
+                            isSubmitting = true
+
+                            coroutineScope.launch(Dispatchers.IO) {
+                                val result = IssueRepository.insertIssue(
+                                    context = context,
+                                    title = cleanTitle,
+                                    category = selectedCategory.displayName,
+                                    description = cleanDescription,
+                                    severity = selectedSeverity.displayName,
+                                    latitude = currentLatitude,
+                                    longitude = currentLongitude,
+                                    addressText = addressText
+                                )
+
+                                withContext(Dispatchers.Main) {
+                                    isSubmitting = false
+                                    if (result.isSuccess) {
+                                        Toast.makeText(
+                                            context,
+                                            "Report submitted successfully!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        onSubmitSuccess()
+                                    } else {
+                                        val errorMsg = result.exceptionOrNull()?.localizedMessage
+                                            ?: "Unknown error"
+                                        Toast.makeText(
+                                            context,
+                                            "Failed: $errorMsg",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                }
                             }
                         }
                     }
                 },
                 style = ButtonStyle.PRIMARY_CTA
             )
-
-            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }
