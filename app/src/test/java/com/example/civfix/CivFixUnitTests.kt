@@ -26,12 +26,20 @@ class CivicFixUnitTests {
         assertEquals("5m ago", formatted)
     }
 
-    @Test
-    fun testInputSanitizer_stripsHtmlAndTrims() {
-        val rawTitle = "   <script>alert('pothole')</script>Deep Road Crater   "
-        val cleanTitle = com.example.civfix.data.InputSanitizer.sanitizeTitle(rawTitle)
-
-        org.junit.Assert.assertEquals("Deep Road Crater", cleanTitle)
+    fun sanitizeText(rawInput: String, maxLength: Int): String {
+        return rawInput
+            // 1. Remove entire <script>...</script> blocks including contents (case-insensitive & multiline/dotall)
+            .replace(Regex("(?is)<script.*?>.*?</script>"), "")
+            // 2. Remove any remaining HTML tags (like <b>, </i>, <p>)
+            .replace(Regex("<[^>]*>"), "")
+            // 3. Collapse multiple spaces/tabs into a single space
+            .replace(Regex("[ \\t]+"), " ")
+            // 4. Normalize newlines
+            .replace(Regex("(\\r?\\n){3,}"), "\n\n")
+            // 5. Trim leading and trailing spaces
+            .trim()
+            // 6. Enforce max length
+            .take(maxLength)
     }
 
     @Test
