@@ -99,6 +99,38 @@ object IssueRepository {
         }
     }
 
+    // Reconciles and pushes locally cached issues to Supabase when connectivity is available
+    suspend fun syncPendingLocalIssuesToCloud() {
+        withContext(Dispatchers.IO) {
+            try {
+                // Fetch existing IDs from Supabase to find what's missing
+                val remoteIssues = withTimeout(5000L) {
+                    SupabaseClient.client.from("issues").select().decodeList<Issue>()
+                }
+                val remoteIds = remoteIssues.map { it.id }.toSet()
+
+                // Find local items that have NEVER reached the cloud
+                val unSyncedIssues = persistentCache.filter { it.id !in remoteIds }
+
+                if (unSyncedIssues.isNotEmpty()) {
+                    println("[CIVFIX_LOG] Found ${unSyncedIssues.size} pending offline issues. Syncing to cloud...")
+                    for (issue in unSyncedIssues) {
+                        try {
+                            withTimeout(4000L) {
+                                SupabaseClient.client.from("issues").insert(issue)
+                            }
+                            println("[CIVFIX_LOG] Synced pending issue '${issue.title}' to cloud successfully!")
+                        } catch (e: Exception) {
+                            println("[CIVFIX_LOG] Failed syncing '${issue.title}': ${e.message}")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                println("[CIVFIX_LOG] Auto-sync skipped (offline or network error): ${e.message}")
+            }
+        }
+    }
+
     // Progress status: Pending -> In Progress -> Resolved
     suspend fun progressIssueStatus(context: Context?, issueId: String): Result<Unit> {
         return withContext(Dispatchers.IO) {
@@ -187,5 +219,6 @@ object IssueRepository {
                 Result.failure(e)
             }
         }
+
     }
 }

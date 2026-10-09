@@ -82,8 +82,11 @@ fun CivFixMainApp() {
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
+        // 1. Reconcile and push any reports created while offline
+        IssueRepository.syncPendingLocalIssuesToCloud()
+
+        // 2. Fetch the fresh cloud list from Supabase
         println("[CIVFIX_LOG] Fetching latest issues from Supabase DB on startup...")
-        // context
         val freshList = IssueRepository.fetchFreshIssuesFromDatabase(context)
         if (freshList.isNotEmpty()) {
             issueList = freshList.toMutableList()
