@@ -70,35 +70,40 @@ object IssueRepository {
         return persistentCache.distinctBy { it.id }
     }
 
-    // Pull central data directly from Supabase DB
-    suspend fun fetchFreshIssuesFromDatabase(context: Context?): List<Issue> {
+    // Fetches cloud data and safely MERGES it with offline records so nothing is deleted
+    suspend fun fetchFreshIssuesFromDatabase(context: Context? = null): List<Issue> {
         return withContext(Dispatchers.IO) {
             try {
                 println("[CIVFIX_LOG] Fetching directly from Supabase 'issues' table...")
-                val remoteIssues = withTimeout(6000L) {
+                val remoteIssues = withTimeout(5000L) {
                     SupabaseClient.client
                         .from("issues")
                         .select()
                         .decodeList<Issue>()
                 }
 
-                println("[CIVFIX_LOG] Fetched ${remoteIssues.size} rows from Supabase!")
+                println("[CIVFIX_LOG] Fetched ${remoteIssues.size} rows from Supabase.")
 
-                // Clear out any old local junk and replace with the true DB records
+                // 1. Identify local issues that are NOT yet in the cloud (offline pending issues)
+                val remoteIds = remoteIssues.map { it.id.lowercase().trim() }.toSet()
+                val offlinePendingIssues = persistentCache.filter { it.id.lowercase().trim() !in remoteIds }
+
+                // 2. MERGE: Keep cloud items PLUS any local offline items that haven't synced yet
+                val combinedList = (offlinePendingIssues + remoteIssues).distinctBy { it.id }
+
                 persistentCache.clear()
-                persistentCache.addAll(remoteIssues.distinctBy { it.id })
+                persistentCache.addAll(combinedList)
 
-                // Save the true DB records to local disk
+                // 3. Save combined dataset to local disk
                 saveToDisk(context)
 
                 persistentCache
             } catch (e: Exception) {
-                println("[CIVFIX_LOG] Supabase fetch failed: ${e.message}. Using local disk cache.")
+                println("[CIVFIX_LOG] Supabase fetch failed or offline: ${e.message}. Preserving local cache.")
                 persistentCache
             }
         }
     }
-
     // ==========================================
     // MARK: - Safe Auto-Sync Offline Reports to Cloud
     // ==========================================
