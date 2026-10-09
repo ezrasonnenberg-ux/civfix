@@ -99,34 +99,40 @@ object IssueRepository {
         }
     }
 
-    // Reconciles and pushes locally cached issues to Supabase when connectivity is available
+    // ==========================================
+    // MARK: - Safe Auto-Sync Offline Reports to Cloud
+    // ==========================================
     suspend fun syncPendingLocalIssuesToCloud() {
         withContext(Dispatchers.IO) {
-            try {
-                // Fetch existing IDs from Supabase to find what's missing
-                val remoteIssues = withTimeout(5000L) {
+            runCatching {
+                // 1. Fetch remote IDs with a tight 3s timeout so it never hangs
+                val remoteIssues = withTimeout(3000L) {
                     SupabaseClient.client.from("issues").select().decodeList<Issue>()
                 }
-                val remoteIds = remoteIssues.map { it.id }.toSet()
 
-                // Find local items that have NEVER reached the cloud
-                val unSyncedIssues = persistentCache.filter { it.id !in remoteIds }
+                // Normalize UUIDs to lowercase to prevent casing mismatches
+                val remoteIds = remoteIssues.map { it.id.lowercase().trim() }.toSet()
+
+                // 2. Identify local issues that genuinely do not exist in the cloud
+                val unSyncedIssues = persistentCache.filter { it.id.lowercase().trim() !in remoteIds }
 
                 if (unSyncedIssues.isNotEmpty()) {
-                    println("[CIVFIX_LOG] Found ${unSyncedIssues.size} pending offline issues. Syncing to cloud...")
+                    println("[CIVFIX_LOG] Background sync: uploading ${unSyncedIssues.size} offline reports...")
                     for (issue in unSyncedIssues) {
-                        try {
-                            withTimeout(4000L) {
+                        runCatching {
+                            withTimeout(3000L) {
                                 SupabaseClient.client.from("issues").insert(issue)
                             }
-                            println("[CIVFIX_LOG] Synced pending issue '${issue.title}' to cloud successfully!")
-                        } catch (e: Exception) {
-                            println("[CIVFIX_LOG] Failed syncing '${issue.title}': ${e.message}")
+                            println("[CIVFIX_LOG] Synced issue '${issue.title}' successfully.")
+                        }.onFailure { err ->
+                            // Catches any duplicate key or format issue silently without breaking anything
+                            println("[CIVFIX_LOG] Skipped upload for '${issue.title}': ${err.message}")
                         }
                     }
                 }
-            } catch (e: Exception) {
-                println("[CIVFIX_LOG] Auto-sync skipped (offline or network error): ${e.message}")
+            }.onFailure { networkErr ->
+                // If device is offline or network is slow, fail fast and silently
+                println("[CIVFIX_LOG] Background sync deferred (offline or slow): ${networkErr.message}")
             }
         }
     }

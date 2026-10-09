@@ -38,7 +38,7 @@ import com.example.civfix.ui.screens.ProfileScreen
 import com.example.civfix.ui.screens.ReportFormScreen
 import com.example.civfix.data.IssueFilterManager
 import kotlinx.coroutines.launch
-
+import kotlinx.coroutines.Dispatchers
 
 
 class MainActivity : ComponentActivity() {
@@ -82,15 +82,20 @@ fun CivFixMainApp() {
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
-        // 1. Reconcile and push any reports created while offline
-        IssueRepository.syncPendingLocalIssuesToCloud()
+        // 1. Fetch cloud records FIRST so the screen updates immediately without delay
+        try {
+            val freshList = IssueRepository.fetchFreshIssuesFromDatabase(context)
+            if (freshList.isNotEmpty()) {
+                issueList = freshList.toMutableList()
+                println("[CIVFIX_LOG] Synced ${freshList.size} issues from cloud DB into UI.")
+            }
+        } catch (e: Exception) {
+            println("[CIVFIX_LOG] Startup cloud fetch deferred: ${e.message}")
+        }
 
-        // 2. Fetch the fresh cloud list from Supabase
-        println("[CIVFIX_LOG] Fetching latest issues from Supabase DB on startup...")
-        val freshList = IssueRepository.fetchFreshIssuesFromDatabase(context)
-        if (freshList.isNotEmpty()) {
-            issueList = freshList.toMutableList()
-            println("[CIVFIX_LOG] Successfully synced ${freshList.size} issues from cloud DB into UI!")
+        // 2. Run offline sync in a detached background coroutine so it NEVER blocks UI startup
+        launch(Dispatchers.IO) {
+            IssueRepository.syncPendingLocalIssuesToCloud()
         }
     }
 
